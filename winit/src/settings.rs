@@ -15,12 +15,14 @@ pub use platform::PlatformSpecific;
 
 use crate::conversion;
 use crate::{Mode, Position};
+use std::fmt::Debug;
+use std::sync::Arc;
 use winit::monitor::MonitorHandle;
 use winit::window::WindowBuilder;
 
 /// The settings of an application.
 #[derive(Debug, Clone, Default)]
-pub struct Settings<Flags> {
+pub struct Settings<Flags, C> {
     /// The identifier of the application.
     ///
     /// If provided, this identifier may be used to identify the application or
@@ -38,6 +40,9 @@ pub struct Settings<Flags> {
     /// Whether the [`Application`] should exit when the user requests the
     /// window to close (e.g. the user presses the close button).
     pub exit_on_close_request: bool,
+
+    /// Optional window configurator, has access to the winit::event_loop::EventLoopWindowTarget
+    pub window_configurator: Option<Arc<dyn WindowConfigurator<C>>>,
 }
 
 /// The window settings of an application.
@@ -177,5 +182,31 @@ impl Default for Window {
             icon: None,
             platform_specific: Default::default(),
         }
+    }
+}
+
+/// Allows to perform any custom settings on the winit::WindowBuilder
+///
+/// Is called after all other window settings have been applied
+pub trait WindowConfigurator<A>: Debug {
+    /// Apply custom settings on the window_builder
+    fn configure_builder(
+        &self,
+        available_monitors: &winit::event_loop::EventLoopWindowTarget<A>,
+        window_builder: WindowBuilder,
+    ) -> WindowBuilder;
+}
+
+/// A WindowConfigurator that does nothing
+#[derive(Debug)]
+pub struct NoopWindowConfigurator;
+
+impl<A> WindowConfigurator<A> for NoopWindowConfigurator {
+    fn configure_builder(
+        &self,
+        _available_monitors: &winit::event_loop::EventLoopWindowTarget<A>,
+        window_builder: WindowBuilder,
+    ) -> WindowBuilder {
+        window_builder
     }
 }

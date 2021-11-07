@@ -4,19 +4,22 @@ use crate::{mouse, Error, Executor, Runtime};
 pub use iced_winit::Application;
 
 use iced_graphics::window;
-use iced_winit::application;
 use iced_winit::conversion;
 use iced_winit::futures;
 use iced_winit::futures::channel::mpsc;
+use iced_winit::{application, Program};
 use iced_winit::{Cache, Clipboard, Debug, Proxy, Settings};
 
+use crate::glutin::event_loop::EventLoopWindowTarget;
+use crate::glutin::platform::run_return::EventLoopExtRunReturn;
 use glutin::window::Window;
 use std::mem::ManuallyDrop;
+use std::ops::Deref;
 
 /// Runs an [`Application`] with an executor, compositor, and the provided
 /// settings.
 pub fn run<A, E, C>(
-    settings: Settings<A::Flags>,
+    settings: Settings<A::Flags, <A as Program>::Message>,
     compositor_settings: C::Settings,
 ) -> Result<(), Error>
 where
@@ -57,6 +60,12 @@ where
             event_loop.primary_monitor(),
             settings.id,
         );
+
+        if let Some(configurator) = settings.window_configurator {
+            let x: &EventLoopWindowTarget<<A as Program>::Message> =
+                event_loop.deref();
+            window_builder = configurator.configure_builder(x, window_builder);
+        }
 
         let context = ContextBuilder::new()
             .with_vsync(true)

@@ -236,7 +236,9 @@ pub trait Application: Sized {
     }
 }
 
-struct Instance<A: Application>(A);
+/// wrapper type for the application to work with the active renderer
+#[derive(Debug)]
+pub struct Instance<A: Application>(A);
 
 #[cfg(not(target_arch = "wasm32"))]
 impl<A> iced_winit::Program for Instance<A>
@@ -296,7 +298,7 @@ where
         self.0.should_exit()
     }
 
-    fn on_exit<>(&mut self) -> Option<Box<dyn FnOnce()>> {
+    fn on_exit(&mut self) -> Option<Box<dyn FnOnce()>> {
         self.0.on_exit()
     }
 }

@@ -17,8 +17,10 @@ use iced_graphics::window;
 use iced_native::program::Program;
 use iced_native::{Cache, UserInterface};
 
+use crate::winit::event_loop::EventLoopWindowTarget;
 use crate::winit::platform::run_return::EventLoopExtRunReturn;
 use std::mem::ManuallyDrop;
+use std::ops::Deref;
 
 /// An interactive, native cross-platform application.
 ///
@@ -114,7 +116,7 @@ pub trait Application: Program {
 /// Runs an [`Application`] with an executor, compositor, and the provided
 /// settings.
 pub fn run<A, E, C>(
-    settings: Settings<A::Flags>,
+    settings: Settings<A::Flags, <A as Program>::Message>,
     compositor_settings: C::Settings,
 ) -> Result<(), Error>
 where
@@ -146,15 +148,20 @@ where
     };
 
     let subscription = application.subscription();
+    let mut window_builder = settings.window.into_builder(
+        &application.title(),
+        application.mode(),
+        event_loop.primary_monitor(),
+        settings.id,
+    );
 
-    let window = settings
-        .window
-        .into_builder(
-            &application.title(),
-            application.mode(),
-            event_loop.primary_monitor(),
-            settings.id,
-        )
+    if let Some(configurator) = settings.window_configurator {
+        let x: &EventLoopWindowTarget<<A as Program>::Message> =
+            event_loop.deref();
+        window_builder = configurator.configure_builder(x, window_builder);
+    }
+
+    let window = window_builder
         .build(&event_loop)
         .map_err(Error::WindowCreationFailed)?;
 

@@ -237,7 +237,7 @@ use iced_web as runtime;
 #[doc(no_inline)]
 pub use widget::*;
 
-pub use application::Application;
+pub use application::{Application, Instance};
 pub use element::Element;
 pub use error::Error;
 pub use executor::Executor;

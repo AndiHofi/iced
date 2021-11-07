@@ -94,13 +94,16 @@ where
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl<Flags> From<Settings<Flags>> for iced_winit::Settings<Flags> {
-    fn from(settings: Settings<Flags>) -> iced_winit::Settings<Flags> {
+impl<Flags, Message> From<Settings<Flags>>
+    for iced_winit::Settings<Flags, Message>
+{
+    fn from(settings: Settings<Flags>) -> iced_winit::Settings<Flags, Message> {
         iced_winit::Settings {
             id: settings.id,
             window: settings.window.into(),
             flags: settings.flags,
             exit_on_close_request: settings.exit_on_close_request,
+            window_configurator: None,
         }
     }
 }
