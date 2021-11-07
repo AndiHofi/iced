@@ -236,9 +236,9 @@ pub trait Application: Sized {
     }
 }
 
-/// wrapper type for the application to work with the active renderer
+/// wrapper type for the iced::Application to work with the actual runtime
 #[derive(Debug)]
-pub struct Instance<A: Application>(A);
+struct Instance<A: Application>(A);
 
 #[cfg(not(target_arch = "wasm32"))]
 impl<A> iced_winit::Program for Instance<A>
