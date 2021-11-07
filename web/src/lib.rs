@@ -153,6 +153,13 @@ pub trait Application {
         Subscription::none()
     }
 
+    /// Callback invoked before unloading the page.
+    ///
+    /// TODO implement this
+    fn on_exit(&mut self) -> Option<Box<dyn FnOnce()>> {
+        None
+    }
+
     /// Runs the [`Application`].
     fn run(flags: Self::Flags)
     where

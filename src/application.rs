@@ -185,6 +185,15 @@ pub trait Application: Sized {
         false
     }
 
+    /// Optional callback function to be called directly before exiting the window event loop
+    ///
+    /// Is called before the main event loop starts, but after the initial Command has been executed
+    ///
+    /// By default, the returned function does nothing
+    fn on_exit(&mut self) -> Option<Box<dyn FnOnce()>> {
+        None
+    }
+
     /// Runs the [`Application`].
     ///
     /// On native platforms, this method will take control of the current thread
@@ -285,6 +294,10 @@ where
 
     fn should_exit(&self) -> bool {
         self.0.should_exit()
+    }
+
+    fn on_exit<>(&mut self) -> Option<Box<dyn FnOnce()>> {
+        self.0.on_exit()
     }
 }
 

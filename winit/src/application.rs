@@ -17,6 +17,7 @@ use iced_graphics::window;
 use iced_native::program::Program;
 use iced_native::{Cache, UserInterface};
 
+use crate::winit::platform::run_return::EventLoopExtRunReturn;
 use std::mem::ManuallyDrop;
 
 /// An interactive, native cross-platform application.
@@ -99,6 +100,15 @@ pub trait Application: Program {
     fn should_exit(&self) -> bool {
         false
     }
+
+    /// Get a callback function that is invoked before exiting the window event loop
+    ///
+    /// Is invoked before entering the event loop, and after the initial command has been processed
+    ///
+    /// By default, the returned function does nothing
+    fn on_exit(&mut self) -> Option<Box<dyn FnOnce()>> {
+        None
+    }
 }
 
 /// Runs an [`Application`] with an executor, compositor, and the provided
@@ -119,7 +129,7 @@ where
     let mut debug = Debug::new();
     debug.startup_started();
 
-    let event_loop = EventLoop::with_user_event();
+    let mut event_loop = EventLoop::with_user_event();
     let mut proxy = event_loop.create_proxy();
 
     let mut runtime = {
@@ -129,7 +139,7 @@ where
         Runtime::new(executor, proxy)
     };
 
-    let (application, init_command) = {
+    let (mut application, init_command) = {
         let flags = settings.flags;
 
         runtime.enter(|| A::new(flags))
@@ -163,6 +173,8 @@ where
 
     let (mut sender, receiver) = mpsc::unbounded();
 
+    let on_exit = application.on_exit();
+
     let mut instance = Box::pin(run_instance::<A, E, C>(
         application,
         compositor,
@@ -178,7 +190,7 @@ where
 
     let mut context = task::Context::from_waker(task::noop_waker_ref());
 
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run_return(move |event, _, control_flow| {
         use winit::event_loop::ControlFlow;
 
         if let ControlFlow::Exit = control_flow {
@@ -211,6 +223,14 @@ where
             };
         }
     });
+
+    if let Some(on_exit) = on_exit {
+        on_exit();
+    } else {
+        std::process::exit(0);
+    }
+
+    Ok(())
 }
 
 async fn run_instance<A, E, C>(
@@ -399,7 +419,7 @@ async fn run_instance<A, E, C>(
                     Err(error) => match error {
                         // This is an unrecoverable error.
                         window::SurfaceError::OutOfMemory => {
-                            panic!("{}", error);
+                            panic!("{:?}", error);
                         }
                         _ => {
                             debug.render_finished();

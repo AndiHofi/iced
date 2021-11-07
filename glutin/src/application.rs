@@ -32,7 +32,7 @@ where
     let mut debug = Debug::new();
     debug.startup_started();
 
-    let event_loop = EventLoop::with_user_event();
+    let mut event_loop = EventLoop::with_user_event();
     let mut proxy = event_loop.create_proxy();
 
     let mut runtime = {
@@ -42,7 +42,7 @@ where
         Runtime::new(executor, proxy)
     };
 
-    let (application, init_command) = {
+    let (mut application, init_command) = {
         let flags = settings.flags;
 
         runtime.enter(|| A::new(flags))
@@ -99,6 +99,8 @@ where
 
     let (mut sender, receiver) = mpsc::unbounded();
 
+    let on_exit = application.on_exit();
+
     let mut instance = Box::pin(run_instance::<A, E, C>(
         application,
         compositor,
@@ -114,7 +116,7 @@ where
 
     let mut context = task::Context::from_waker(task::noop_waker_ref());
 
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run_return(move |event, _, control_flow| {
         use glutin::event_loop::ControlFlow;
 
         if let ControlFlow::Exit = control_flow {
@@ -147,6 +149,14 @@ where
             };
         }
     });
+
+    if let Some(on_exit) = on_exit {
+        on_exit();
+    } else {
+        std::process::exit(0);
+    }
+
+    Ok(())
 }
 
 async fn run_instance<A, E, C>(
