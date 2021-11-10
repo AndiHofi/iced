@@ -30,6 +30,7 @@ pub mod text;
 pub mod text_input;
 pub mod toggler;
 pub mod tooltip;
+pub mod label_text;
 
 #[doc(no_inline)]
 pub use button::Button;
