@@ -14,15 +14,15 @@ mod platform;
 pub use platform::PlatformSpecific;
 
 use crate::conversion;
+use crate::window_configurator::WindowConfigurator;
+use crate::winit::event_loop::EventLoopWindowTarget;
 use crate::{Mode, Position};
 use std::fmt::Debug;
-use std::sync::Arc;
-use winit::monitor::MonitorHandle;
 use winit::window::WindowBuilder;
 
 /// The settings of an application.
 #[derive(Debug, Clone, Default)]
-pub struct Settings<Flags, C> {
+pub struct Settings<Flags> {
     /// The identifier of the application.
     ///
     /// If provided, this identifier may be used to identify the application or
@@ -40,9 +40,6 @@ pub struct Settings<Flags, C> {
     /// Whether the [`Application`] should exit when the user requests the
     /// window to close (e.g. the user presses the close button).
     pub exit_on_close_request: bool,
-
-    /// Optional window configurator, has access to the winit::event_loop::EventLoopWindowTarget
-    pub window_configurator: Option<Arc<dyn WindowConfigurator<C>>>,
 }
 
 /// The window settings of an application.
@@ -79,43 +76,51 @@ pub struct Window {
     pub platform_specific: platform::PlatformSpecific,
 }
 
-impl Window {
-    /// Converts the window settings into a `WindowBuilder` from `winit`.
-    pub fn into_builder(
-        self,
-        title: &str,
-        mode: Mode,
-        primary_monitor: Option<MonitorHandle>,
-        _id: Option<String>,
-    ) -> WindowBuilder {
-        let mut window_builder = WindowBuilder::new();
+/// Default `WindowConfigurator` that configures the winit WindowBuilder
+#[derive(Debug)]
+pub struct SettingsWindowConfigurator {
+    /// base window settings
+    pub window: Window,
 
-        let (width, height) = self.size;
+    /// Optional application id
+    pub id: Option<String>,
+
+    /// initial window mode
+    pub mode: Mode,
+}
+
+impl<A> WindowConfigurator<A> for SettingsWindowConfigurator {
+    fn configure_builder(
+        self,
+        available_monitors: &EventLoopWindowTarget<A>,
+        mut window_builder: WindowBuilder,
+    ) -> WindowBuilder {
+        let (width, height) = self.window.size;
 
         window_builder = window_builder
-            .with_title(title)
             .with_inner_size(winit::dpi::LogicalSize { width, height })
-            .with_resizable(self.resizable)
-            .with_decorations(self.decorations)
-            .with_transparent(self.transparent)
-            .with_window_icon(self.icon)
-            .with_always_on_top(self.always_on_top)
-            .with_visible(conversion::visible(mode));
+            .with_resizable(self.window.resizable)
+            .with_decorations(self.window.decorations)
+            .with_transparent(self.window.transparent)
+            .with_window_icon(self.window.icon)
+            .with_always_on_top(self.window.always_on_top)
+            .with_visible(conversion::visible(self.mode));
 
+        let primary_monitor = available_monitors.primary_monitor();
         if let Some(position) = conversion::position(
             primary_monitor.as_ref(),
-            self.size,
-            self.position,
+            self.window.size,
+            self.window.position,
         ) {
             window_builder = window_builder.with_position(position);
         }
 
-        if let Some((width, height)) = self.min_size {
+        if let Some((width, height)) = self.window.min_size {
             window_builder = window_builder
                 .with_min_inner_size(winit::dpi::LogicalSize { width, height });
         }
 
-        if let Some((width, height)) = self.max_size {
+        if let Some((width, height)) = self.window.max_size {
             window_builder = window_builder
                 .with_max_inner_size(winit::dpi::LogicalSize { width, height });
         }
@@ -130,7 +135,7 @@ impl Window {
         {
             use ::winit::platform::unix::WindowBuilderExtUnix;
 
-            if let Some(id) = _id {
+            if let Some(id) = self.id {
                 window_builder = window_builder.with_app_id(id);
             }
         }
@@ -139,12 +144,13 @@ impl Window {
         {
             use winit::platform::windows::WindowBuilderExtWindows;
 
-            if let Some(parent) = self.platform_specific.parent {
+            if let Some(parent) = self.window.platform_specific.parent {
                 window_builder = window_builder.with_parent_window(parent);
             }
 
-            window_builder = window_builder
-                .with_drag_and_drop(self.platform_specific.drag_and_drop);
+            window_builder = window_builder.with_drag_and_drop(
+                self.window.platform_specific.drag_and_drop,
+            );
         }
 
         #[cfg(target_os = "macos")]
@@ -152,17 +158,18 @@ impl Window {
             use winit::platform::macos::WindowBuilderExtMacOS;
 
             window_builder = window_builder
-                .with_title_hidden(self.platform_specific.title_hidden)
+                .with_title_hidden(self.window.platform_specific.title_hidden)
                 .with_titlebar_transparent(
-                    self.platform_specific.titlebar_transparent,
+                    self.window.platform_specific.titlebar_transparent,
                 )
                 .with_fullsize_content_view(
-                    self.platform_specific.fullsize_content_view,
+                    self.window.platform_specific.fullsize_content_view,
                 );
         }
 
-        window_builder = window_builder
-            .with_fullscreen(conversion::fullscreen(primary_monitor, mode));
+        window_builder = window_builder.with_fullscreen(
+            conversion::fullscreen(primary_monitor, self.mode),
+        );
 
         window_builder
     }
@@ -182,31 +189,5 @@ impl Default for Window {
             icon: None,
             platform_specific: Default::default(),
         }
-    }
-}
-
-/// Allows to perform any custom settings on the winit::WindowBuilder
-///
-/// Is called after all other window settings have been applied
-pub trait WindowConfigurator<A>: Debug {
-    /// Apply custom settings on the window_builder
-    fn configure_builder(
-        &self,
-        available_monitors: &winit::event_loop::EventLoopWindowTarget<A>,
-        window_builder: WindowBuilder,
-    ) -> WindowBuilder;
-}
-
-/// A WindowConfigurator that does nothing
-#[derive(Debug)]
-pub struct NoopWindowConfigurator;
-
-impl<A> WindowConfigurator<A> for NoopWindowConfigurator {
-    fn configure_builder(
-        &self,
-        _available_monitors: &winit::event_loop::EventLoopWindowTarget<A>,
-        window_builder: WindowBuilder,
-    ) -> WindowBuilder {
-        window_builder
     }
 }
