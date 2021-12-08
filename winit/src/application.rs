@@ -133,9 +133,9 @@ where
         mode: Mode::Windowed
     };
     run_with_window_configurator::<A,E,C,_>(
+        settings.flags,
         compositor_settings,
         window_configurator,
-        settings.flags,
         settings.exit_on_close_request,
     )
 }
@@ -143,9 +143,9 @@ where
 /// Run an [`Application`] using with an executor, compositor,
 /// and the provided [`WindowConfigurator`]
 pub fn run_with_window_configurator<A, E, C, W>(
+    flags: A::Flags,
     compositor_settings: C::Settings,
     window_configurator: W,
-    flags: A::Flags,
     exit_on_close_request: bool,
 ) -> Result<(), Error>
 where
