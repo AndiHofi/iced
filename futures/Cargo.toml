@@ -12,6 +12,7 @@ categories = ["gui"]
 
 [features]
 thread-pool = ["futures/thread-pool"]
+default = ["smol"]
 
 [dependencies]
 log = "0.4"

@@ -19,7 +19,6 @@ use iced_native::user_interface::{self, UserInterface};
 
 use crate::settings::{SettingsWindowConfigurator};
 use crate::winit::event_loop::EventLoopWindowTarget;
-use crate::winit::platform::run_return::EventLoopExtRunReturn;
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use winit::window::WindowBuilder;
@@ -152,7 +151,7 @@ where
     let mut debug = Debug::new();
     debug.startup_started();
 
-    let mut event_loop = EventLoop::with_user_event();
+    let event_loop = EventLoop::with_user_event();
     let mut proxy = event_loop.create_proxy();
 
     let mut runtime = {
@@ -162,7 +161,7 @@ where
         Runtime::new(executor, proxy)
     };
 
-    let (mut application, init_command) = {
+    let (application, init_command) = {
         runtime.enter(|| A::new(flags))
     };
 
