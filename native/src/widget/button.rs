@@ -9,7 +9,7 @@ use crate::renderer;
 use crate::touch;
 use crate::{
     Background, Clipboard, Color, Element, Hasher, Layout, Length, Padding,
-    Point, Rectangle, Vector, Widget,
+    Point, Rectangle, Shell, Vector, Widget,
 };
 
 use std::hash::Hash;
@@ -197,7 +197,7 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         if let event::Status::Captured = self.content.on_event(
             event.clone(),
@@ -205,7 +205,7 @@ where
             cursor_position,
             renderer,
             clipboard,
-            messages,
+            shell,
         ) {
             return event::Status::Captured;
         }
@@ -232,7 +232,7 @@ where
                         self.state.is_pressed = false;
 
                         if bounds.contains(cursor_position) {
-                            messages.push(on_press);
+                            shell.publish(on_press);
                         }
 
                         return event::Status::Captured;
@@ -253,6 +253,7 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         _viewport: &Rectangle,
+        _renderer: &Renderer,
     ) -> mouse::Interaction {
         let is_mouse_over = layout.bounds().contains(cursor_position);
         let is_disabled = self.on_press.is_none();
@@ -343,8 +344,10 @@ where
     fn overlay(
         &mut self,
         layout: Layout<'_>,
+        renderer: &Renderer,
     ) -> Option<overlay::Element<'_, Message, Renderer>> {
-        self.content.overlay(layout.children().next().unwrap())
+        self.content
+            .overlay(layout.children().next().unwrap(), renderer)
     }
 }
 

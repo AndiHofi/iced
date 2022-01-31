@@ -4,7 +4,7 @@ use crate::mouse;
 use crate::overlay;
 use crate::renderer;
 use crate::{
-    Clipboard, Color, Hasher, Layout, Length, Point, Rectangle, Widget,
+    Clipboard, Color, Hasher, Layout, Length, Point, Rectangle, Shell, Widget,
 };
 
 /// A generic [`Widget`].
@@ -228,7 +228,7 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         self.widget.on_event(
             event,
@@ -236,7 +236,7 @@ where
             cursor_position,
             renderer,
             clipboard,
-            messages,
+            shell,
         )
     }
 
@@ -259,9 +259,14 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
+        renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.widget
-            .mouse_interaction(layout, cursor_position, viewport)
+        self.widget.mouse_interaction(
+            layout,
+            cursor_position,
+            viewport,
+            renderer,
+        )
     }
 
     /// Computes the _layout_ hash of the [`Element`].
@@ -273,8 +278,9 @@ where
     pub fn overlay<'b>(
         &'b mut self,
         layout: Layout<'_>,
+        renderer: &Renderer,
     ) -> Option<overlay::Element<'b, Message, Renderer>> {
-        self.widget.overlay(layout)
+        self.widget.overlay(layout, renderer)
     }
 }
 
@@ -327,9 +333,10 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<B>,
+        shell: &mut Shell<'_, B>,
     ) -> event::Status {
-        let mut original_messages = Vec::new();
+        let mut local_messages = Vec::new();
+        let mut local_shell = Shell::new(&mut local_messages);
 
         let status = self.widget.on_event(
             event,
@@ -337,12 +344,10 @@ where
             cursor_position,
             renderer,
             clipboard,
-            &mut original_messages,
+            &mut local_shell,
         );
 
-        original_messages
-            .drain(..)
-            .for_each(|message| messages.push((self.mapper)(message)));
+        shell.merge(local_shell, &self.mapper);
 
         status
     }
@@ -364,9 +369,14 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
+        renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.widget
-            .mouse_interaction(layout, cursor_position, viewport)
+        self.widget.mouse_interaction(
+            layout,
+            cursor_position,
+            viewport,
+            renderer,
+        )
     }
 
     fn hash_layout(&self, state: &mut Hasher) {
@@ -376,11 +386,12 @@ where
     fn overlay(
         &mut self,
         layout: Layout<'_>,
+        renderer: &Renderer,
     ) -> Option<overlay::Element<'_, B, Renderer>> {
         let mapper = &self.mapper;
 
         self.widget
-            .overlay(layout)
+            .overlay(layout, renderer)
             .map(move |overlay| overlay.map(mapper))
     }
 }
@@ -427,7 +438,7 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         self.element.widget.on_event(
             event,
@@ -435,7 +446,7 @@ where
             cursor_position,
             renderer,
             clipboard,
-            messages,
+            shell,
         )
     }
 
@@ -483,10 +494,14 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
+        renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.element
-            .widget
-            .mouse_interaction(layout, cursor_position, viewport)
+        self.element.widget.mouse_interaction(
+            layout,
+            cursor_position,
+            viewport,
+            renderer,
+        )
     }
 
     fn hash_layout(&self, state: &mut Hasher) {
@@ -496,7 +511,8 @@ where
     fn overlay(
         &mut self,
         layout: Layout<'_>,
+        renderer: &Renderer,
     ) -> Option<overlay::Element<'_, Message, Renderer>> {
-        self.element.overlay(layout)
+        self.element.overlay(layout, renderer)
     }
 }

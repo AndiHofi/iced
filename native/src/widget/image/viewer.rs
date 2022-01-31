@@ -5,15 +5,15 @@ use crate::layout;
 use crate::mouse;
 use crate::renderer;
 use crate::{
-    Clipboard, Element, Hasher, Layout, Length, Point, Rectangle, Size, Vector,
-    Widget,
+    Clipboard, Element, Hasher, Layout, Length, Point, Rectangle, Shell, Size,
+    Vector, Widget,
 };
 
 use std::hash::Hash;
 
 /// A frame that displays an image with the ability to zoom in/out and pan.
 #[allow(missing_debug_implementations)]
-pub struct Viewer<'a> {
+pub struct Viewer<'a, Handle> {
     state: &'a mut State,
     padding: u16,
     width: Length,
@@ -21,14 +21,12 @@ pub struct Viewer<'a> {
     min_scale: f32,
     max_scale: f32,
     scale_step: f32,
-    handle: image::Handle,
+    handle: Handle,
 }
 
-impl<'a> Viewer<'a> {
-    /// Creates a new [`Viewer`] with the given [`State`] and [`Handle`].
-    ///
-    /// [`Handle`]: image::Handle
-    pub fn new(state: &'a mut State, handle: image::Handle) -> Self {
+impl<'a, Handle> Viewer<'a, Handle> {
+    /// Creates a new [`Viewer`] with the given [`State`].
+    pub fn new(state: &'a mut State, handle: Handle) -> Self {
         Viewer {
             state,
             padding: 0,
@@ -89,7 +87,7 @@ impl<'a> Viewer<'a> {
     /// will be respected.
     fn image_size<Renderer>(&self, renderer: &Renderer, bounds: Size) -> Size
     where
-        Renderer: image::Renderer,
+        Renderer: image::Renderer<Handle = Handle>,
     {
         let (width, height) = renderer.dimensions(&self.handle);
 
@@ -114,9 +112,11 @@ impl<'a> Viewer<'a> {
     }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for Viewer<'a>
+impl<'a, Message, Renderer, Handle> Widget<Message, Renderer>
+    for Viewer<'a, Handle>
 where
-    Renderer: image::Renderer,
+    Renderer: image::Renderer<Handle = Handle>,
+    Handle: Clone + Hash,
 {
     fn width(&self) -> Length {
         self.width
@@ -169,7 +169,7 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        _messages: &mut Vec<Message>,
+        _shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         let bounds = layout.bounds();
         let is_mouse_over = bounds.contains(cursor_position);
@@ -286,6 +286,7 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         _viewport: &Rectangle,
+        _renderer: &Renderer,
     ) -> mouse::Interaction {
         let bounds = layout.bounds();
         let is_mouse_over = bounds.contains(cursor_position);
@@ -394,12 +395,14 @@ impl State {
     }
 }
 
-impl<'a, Message, Renderer> From<Viewer<'a>> for Element<'a, Message, Renderer>
+impl<'a, Message, Renderer, Handle> From<Viewer<'a, Handle>>
+    for Element<'a, Message, Renderer>
 where
-    Renderer: 'a + image::Renderer,
+    Renderer: 'a + image::Renderer<Handle = Handle>,
     Message: 'a,
+    Handle: Clone + Hash + 'a,
 {
-    fn from(viewer: Viewer<'a>) -> Element<'a, Message, Renderer> {
+    fn from(viewer: Viewer<'a, Handle>) -> Element<'a, Message, Renderer> {
         Element::new(viewer)
     }
 }

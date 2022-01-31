@@ -15,7 +15,7 @@ use iced_futures::futures;
 use iced_futures::futures::channel::mpsc;
 use iced_graphics::window;
 use iced_native::program::Program;
-use iced_native::{Cache, UserInterface};
+use iced_native::user_interface::{self, UserInterface};
 
 use crate::settings::{SettingsWindowConfigurator};
 use crate::winit::event_loop::EventLoopWindowTarget;
@@ -28,7 +28,7 @@ use crate::window_configurator::WindowConfigurator;
 /// An interactive, native cross-platform application.
 ///
 /// This trait is the main entrypoint of Iced. Once implemented, you can run
-/// your GUI application by simply calling [`run`](#method.run). It will run in
+/// your GUI application by simply calling [`run`]. It will run in
 /// its own window.
 ///
 /// An [`Application`] can execute asynchronous actions by returning a
@@ -191,6 +191,21 @@ where
         .build(&event_loop)
         .map_err(Error::WindowCreationFailed)?;
 
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::WindowExtWebSys;
+
+        let canvas = window.canvas();
+
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let body = document.body().unwrap();
+
+        let _ = body
+            .append_child(&canvas)
+            .expect("Append canvas to HTML body");
+    }
+
     let mut clipboard = Clipboard::connect(&window);
 
     run_command(
@@ -257,12 +272,6 @@ where
         }
     });
 
-    if let Some(on_exit) = on_exit {
-        on_exit();
-    } else {
-        std::process::exit(0);
-    }
-
     Ok(())
 }
 
@@ -300,7 +309,7 @@ async fn run_instance<A, E, C>(
 
     let mut user_interface = ManuallyDrop::new(build_user_interface(
         &mut application,
-        Cache::default(),
+        user_interface::Cache::default(),
         &mut renderer,
         state.logical_size(),
         &mut debug,
@@ -321,7 +330,7 @@ async fn run_instance<A, E, C>(
 
                 debug.event_processing_started();
 
-                let statuses = user_interface.update(
+                let (interface_state, statuses) = user_interface.update(
                     &events,
                     state.cursor_position(),
                     &mut renderer,
@@ -335,7 +344,12 @@ async fn run_instance<A, E, C>(
                     runtime.broadcast(event);
                 }
 
-                if !messages.is_empty() {
+                if !messages.is_empty()
+                    || matches!(
+                        interface_state,
+                        user_interface::State::Outdated,
+                    )
+                {
                     let cache =
                         ManuallyDrop::into_inner(user_interface).into_cache();
 
@@ -521,7 +535,7 @@ pub fn requests_exit(
 /// [`struct@Debug`] information accordingly.
 pub fn build_user_interface<'a, A: Application>(
     application: &'a mut A,
-    cache: Cache,
+    cache: user_interface::Cache,
     renderer: &mut A::Renderer,
     size: Size,
     debug: &mut Debug,
@@ -605,5 +619,45 @@ pub fn run_command<Message: 'static + std::fmt::Debug + Send, E: Executor>(
                 }
             },
         }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+mod platform {
+    pub fn run<T, F>(
+        mut event_loop: winit::event_loop::EventLoop<T>,
+        event_handler: F,
+    ) -> Result<(), super::Error>
+    where
+        F: 'static
+            + FnMut(
+                winit::event::Event<'_, T>,
+                &winit::event_loop::EventLoopWindowTarget<T>,
+                &mut winit::event_loop::ControlFlow,
+            ),
+    {
+        use winit::platform::run_return::EventLoopExtRunReturn;
+
+        let _ = event_loop.run_return(event_handler);
+
+        Ok(())
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+mod platform {
+    pub fn run<T, F>(
+        event_loop: winit::event_loop::EventLoop<T>,
+        event_handler: F,
+    ) -> !
+    where
+        F: 'static
+            + FnMut(
+                winit::event::Event<'_, T>,
+                &winit::event_loop::EventLoopWindowTarget<T>,
+                &mut winit::event_loop::ControlFlow,
+            ),
+    {
+        event_loop.run(event_handler)
     }
 }

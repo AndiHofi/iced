@@ -11,7 +11,7 @@ use crate::widget::scrollable::{self, Scrollable};
 use crate::widget::Container;
 use crate::{
     Clipboard, Color, Element, Hasher, Layout, Length, Padding, Point,
-    Rectangle, Size, Vector, Widget,
+    Rectangle, Shell, Size, Vector, Widget,
 };
 
 pub use iced_style::menu::Style;
@@ -222,7 +222,7 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         self.container.on_event(
             event.clone(),
@@ -230,7 +230,7 @@ where
             cursor_position,
             renderer,
             clipboard,
-            messages,
+            shell,
         )
     }
 
@@ -239,9 +239,14 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
+        renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.container
-            .mouse_interaction(layout, cursor_position, viewport)
+        self.container.mouse_interaction(
+            layout,
+            cursor_position,
+            viewport,
+            renderer,
+        )
     }
 
     fn draw(
@@ -333,7 +338,7 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        _messages: &mut Vec<Message>,
+        _shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
@@ -392,6 +397,7 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         _viewport: &Rectangle,
+        _renderer: &Renderer,
     ) -> mouse::Interaction {
         let is_mouse_over = layout.bounds().contains(cursor_position);
 
@@ -454,7 +460,7 @@ where
                     ..bounds
                 },
                 size: f32::from(text_size),
-                font: self.font,
+                font: self.font.clone(),
                 color: if is_selected {
                     self.style.selected_text_color
                 } else {

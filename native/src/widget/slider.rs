@@ -8,7 +8,7 @@ use crate::renderer;
 use crate::touch;
 use crate::{
     Background, Clipboard, Color, Element, Hasher, Layout, Length, Point,
-    Rectangle, Size, Widget,
+    Rectangle, Shell, Size, Widget,
 };
 
 use std::hash::Hash;
@@ -191,14 +191,16 @@ where
         cursor_position: Point,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
+        let is_dragging = self.state.is_dragging;
+
         let mut change = || {
             let bounds = layout.bounds();
-            if cursor_position.x <= bounds.x {
-                messages.push((self.on_change)(*self.range.start()));
+            let new_value = if cursor_position.x <= bounds.x {
+                *self.range.start()
             } else if cursor_position.x >= bounds.x + bounds.width {
-                messages.push((self.on_change)(*self.range.end()));
+                *self.range.end()
             } else {
                 let step = self.step.into();
                 let start = (*self.range.start()).into();
@@ -211,8 +213,16 @@ where
                 let value = steps * step + start;
 
                 if let Some(value) = T::from_f64(value) {
-                    messages.push((self.on_change)(value));
+                    value
+                } else {
+                    return;
                 }
+            };
+
+            if (self.value.into() - new_value.into()).abs() > f64::EPSILON {
+                shell.publish((self.on_change)(new_value));
+
+                self.value = new_value;
             }
         };
 
@@ -229,9 +239,9 @@ where
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerLifted { .. })
             | Event::Touch(touch::Event::FingerLost { .. }) => {
-                if self.state.is_dragging {
+                if is_dragging {
                     if let Some(on_release) = self.on_release.clone() {
-                        messages.push(on_release);
+                        shell.publish(on_release);
                     }
                     self.state.is_dragging = false;
 
@@ -240,7 +250,7 @@ where
             }
             Event::Mouse(mouse::Event::CursorMoved { .. })
             | Event::Touch(touch::Event::FingerMoved { .. }) => {
-                if self.state.is_dragging {
+                if is_dragging {
                     change();
 
                     return event::Status::Captured;
@@ -351,6 +361,7 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         _viewport: &Rectangle,
+        _renderer: &Renderer,
     ) -> mouse::Interaction {
         let bounds = layout.bounds();
         let is_mouse_over = bounds.contains(cursor_position);

@@ -60,7 +60,7 @@ impl Sandbox for Styling {
                 column.push(
                     Radio::new(
                         *theme,
-                        &format!("{:?}", theme),
+                        format!("{:?}", theme),
                         Some(self.theme),
                         Message::ThemeChanged,
                     )
@@ -343,6 +343,7 @@ mod style {
                     dot_color: ACTIVE,
                     border_width: 1.0,
                     border_color: ACTIVE,
+                    text_color: None,
                 }
             }
 
@@ -531,6 +532,7 @@ mod style {
                     border_radius: 2.0,
                     border_width: 1.0,
                     border_color: ACTIVE,
+                    text_color: None,
                 }
             }
 

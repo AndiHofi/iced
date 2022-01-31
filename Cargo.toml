@@ -5,7 +5,7 @@ authors = ["Héctor Ramón Jiménez <hector0193@gmail.com>"]
 edition = "2018"
 description = "A cross-platform GUI library inspired by Elm"
 license = "MIT"
-repository = "https://github.com/hecrj/iced"
+repository = "https://github.com/iced-rs/iced"
 documentation = "https://docs.rs/iced"
 readme = "README.md"
 keywords = ["gui", "ui", "graphics", "interface", "widgets"]
@@ -13,7 +13,7 @@ categories = ["gui"]
 resolver = "2"
 
 [features]
-default = ["wgpu", "default_system_font"]
+default = ["wgpu"]
 # Enables the `iced_wgpu` renderer
 wgpu = ["iced_wgpu"]
 # Enables the `Image` widget
@@ -38,8 +38,6 @@ glow_default_system_font = ["iced_glow/default_system_font"]
 debug = ["iced_winit/debug"]
 # Enables `tokio` as the `executor::Default` on native platforms
 tokio = ["iced_futures/tokio"]
-# Enables old `tokio` (0.2) as the `executor::Default` on native platforms
-tokio_old = ["iced_futures/tokio_old"]
 # Enables `async-std` as the `executor::Default` on native platforms
 async-std = ["iced_futures/async-std"]
 # Enables `smol` as the `executor::Default` on native platforms
@@ -57,18 +55,20 @@ members = [
     "graphics",
     "glow",
     "glutin",
+    "lazy",
     "native",
     "style",
-    "web",
     "wgpu",
     "winit",
     "examples/bezier_tool",
     "examples/clock",
     "examples/color_palette",
+    "examples/component",
     "examples/counter",
     "examples/custom_widget",
     "examples/download_progress",
     "examples/events",
+    "examples/exit",
     "examples/game_of_life",
     "examples/geometry",
     "examples/integration_opengl",
@@ -87,21 +87,22 @@ members = [
     "examples/tooltip",
     "examples/tour",
     "examples/url_handler",
+    "examples/websocket",
 ]
 
 [dependencies]
 iced_core = { version = "0.4", path = "core" }
 iced_futures = { version = "0.3", path = "futures" }
+iced_winit = { version = "0.3", path = "winit" }
+iced_glutin = { version = "0.2", path = "glutin", optional = true }
+iced_glow = { version = "0.2", path = "glow", optional = true }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-iced_winit = { version = "0.3", path = "winit" }
-iced_glutin = { version = "0.2", path = "glutin", optional = true }
 iced_wgpu = { version = "0.4", path = "wgpu", optional = true }
-iced_glow = { version = "0.2", path = "glow", optional = true}
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-iced_web = { version = "0.4", path = "web" }
+iced_wgpu = { version = "0.4", path = "wgpu", features = ["webgl"], optional = true }
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

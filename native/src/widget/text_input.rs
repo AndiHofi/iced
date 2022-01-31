@@ -21,7 +21,7 @@ use crate::text::{self, Text};
 use crate::touch;
 use crate::{
     Clipboard, Color, Element, Hasher, Layout, Length, Padding, Point,
-    Rectangle, Size, Vector, Widget,
+    Rectangle, Shell, Size, Vector, Widget,
 };
 
 use std::u32;
@@ -52,7 +52,7 @@ pub use iced_style::text_input::{Style, StyleSheet};
 /// )
 /// .padding(10);
 /// ```
-/// ![Text input drawn by `iced_wgpu`](https://github.com/hecrj/iced/blob/7760618fb112074bc40b148944521f312152012a/docs/images/text_input.png?raw=true)
+/// ![Text input drawn by `iced_wgpu`](https://github.com/iced-rs/iced/blob/7760618fb112074bc40b148944521f312152012a/docs/images/text_input.png?raw=true)
 #[allow(missing_debug_implementations)]
 pub struct TextInput<'a, Message, Renderer: text::Renderer> {
     state: &'a mut State,
@@ -219,7 +219,7 @@ where
                             &value,
                             size,
                             position,
-                            self.font,
+                            self.font.clone(),
                         );
 
                     (
@@ -251,7 +251,7 @@ where
                             &value,
                             size,
                             left,
-                            self.font,
+                            self.font.clone(),
                         );
 
                     let (right_position, right_offset) =
@@ -261,7 +261,7 @@ where
                             &value,
                             size,
                             right,
-                            self.font,
+                            self.font.clone(),
                         );
 
                     let width = right_position - left_position;
@@ -300,7 +300,7 @@ where
                 &text
             },
             size,
-            self.font,
+            self.font.clone(),
         );
 
         let render = |renderer: &mut Renderer| {
@@ -319,7 +319,7 @@ where
                 } else {
                     self.style_sheet.value_color()
                 },
-                font: self.font,
+                font: self.font.clone(),
                 bounds: Rectangle {
                     y: text_bounds.center_y(),
                     width: f32::INFINITY,
@@ -384,7 +384,7 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
@@ -414,7 +414,7 @@ where
                                 find_cursor_position(
                                     renderer,
                                     text_layout.bounds(),
-                                    self.font,
+                                    self.font.clone(),
                                     self.size,
                                     &value,
                                     &self.state,
@@ -434,7 +434,7 @@ where
                                 let position = find_cursor_position(
                                     renderer,
                                     text_layout.bounds(),
-                                    self.font,
+                                    self.font.clone(),
                                     self.size,
                                     &self.value,
                                     &self.state,
@@ -481,7 +481,7 @@ where
                     let position = find_cursor_position(
                         renderer,
                         text_layout.bounds(),
-                        self.font,
+                        self.font.clone(),
                         self.size,
                         &value,
                         &self.state,
@@ -509,7 +509,7 @@ where
                 editor.insert(c);
 
                 let message = (self.on_change)(editor.contents());
-                messages.push(message);
+                shell.publish(message);
 
                 return event::Status::Captured;
             }
@@ -519,9 +519,10 @@ where
                 let modifiers = self.state.keyboard_modifiers;
 
                 match key_code {
-                    keyboard::KeyCode::Enter => {
+                    keyboard::KeyCode::Enter
+                    | keyboard::KeyCode::NumpadEnter => {
                         if let Some(on_submit) = self.on_submit.clone() {
-                            messages.push(on_submit);
+                            shell.publish(on_submit);
                         }
                     }
                     keyboard::KeyCode::Backspace => {
@@ -551,7 +552,7 @@ where
                         editor.backspace();
 
                         let message = (self.on_change)(editor.contents());
-                        messages.push(message);
+                        shell.publish(message);
                     }
                     keyboard::KeyCode::Delete => {
                         if platform::is_jump_modifier_pressed(modifiers)
@@ -582,7 +583,7 @@ where
                         editor.delete();
 
                         let message = (self.on_change)(editor.contents());
-                        messages.push(message);
+                        shell.publish(message);
                     }
                     keyboard::KeyCode::Left => {
                         if platform::is_jump_modifier_pressed(modifiers)
@@ -674,7 +675,7 @@ where
                         editor.delete();
 
                         let message = (self.on_change)(editor.contents());
-                        messages.push(message);
+                        shell.publish(message);
                     }
                     keyboard::KeyCode::V => {
                         if self.state.keyboard_modifiers.command() {
@@ -700,7 +701,7 @@ where
                             editor.paste(content.clone());
 
                             let message = (self.on_change)(editor.contents());
-                            messages.push(message);
+                            shell.publish(message);
 
                             self.state.is_pasting = Some(content);
                         } else {
@@ -763,6 +764,7 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         _viewport: &Rectangle,
+        _renderer: &Renderer,
     ) -> mouse::Interaction {
         if layout.bounds().contains(cursor_position) {
             mouse::Interaction::Text
@@ -961,13 +963,14 @@ where
 {
     let size = size.unwrap_or(renderer.default_size());
 
-    let offset = offset(renderer, text_bounds, font, size, &value, &state);
+    let offset =
+        offset(renderer, text_bounds, font.clone(), size, &value, &state);
 
     renderer
         .hit_test(
             &value.to_string(),
             size.into(),
-            font,
+            font.clone(),
             Size::INFINITY,
             Point::new(x + offset, text_bounds.height / 2.0),
             true,

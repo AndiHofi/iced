@@ -197,42 +197,33 @@ pub trait Application: Sized {
     /// Runs the [`Application`].
     ///
     /// On native platforms, this method will take control of the current thread
-    /// and __will NOT return__ unless there is an [`Error`] during startup.
+    /// until the [`Application`] exits.
     ///
-    /// It should probably be that last thing you call in your `main` function.
+    /// On the web platform, this method __will NOT return__ unless there is an
+    /// [`Error`] during startup.
     ///
     /// [`Error`]: crate::Error
     fn run(settings: Settings<Self::Flags>) -> crate::Result
     where
         Self: 'static,
     {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let renderer_settings = crate::renderer::Settings {
-                default_font: settings.default_font,
-                default_text_size: settings.default_text_size,
-                text_multithreading: settings.text_multithreading,
-                antialiasing: if settings.antialiasing {
-                    Some(crate::renderer::settings::Antialiasing::MSAAx4)
-                } else {
-                    None
-                },
-                ..crate::renderer::Settings::from_env()
-            };
+        let renderer_settings = crate::renderer::Settings {
+            default_font: settings.default_font,
+            default_text_size: settings.default_text_size,
+            text_multithreading: settings.text_multithreading,
+            antialiasing: if settings.antialiasing {
+                Some(crate::renderer::settings::Antialiasing::MSAAx4)
+            } else {
+                None
+            },
+            ..crate::renderer::Settings::from_env()
+        };
 
-            Ok(crate::runtime::application::run::<
-                Instance<Self>,
-                Self::Executor,
-                crate::renderer::window::Compositor,
-            >(settings.into(), renderer_settings)?)
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            <Instance<Self> as iced_web::Application>::run(settings.flags);
-
-            Ok(())
-        }
+        Ok(crate::runtime::application::run::<
+            Instance<Self>,
+            Self::Executor,
+            crate::renderer::window::Compositor,
+        >(settings.into(), renderer_settings)?)
     }
 }
 
@@ -240,7 +231,6 @@ pub trait Application: Sized {
 #[derive(Debug)]
 struct Instance<A: Application>(A);
 
-#[cfg(not(target_arch = "wasm32"))]
 impl<A> iced_winit::Program for Instance<A>
 where
     A: Application,
@@ -257,7 +247,6 @@ where
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl<A> crate::runtime::Application for Instance<A>
 where
     A: Application,
@@ -300,37 +289,5 @@ where
 
     fn on_exit(&mut self) -> Option<Box<dyn FnOnce()>> {
         self.0.on_exit()
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-impl<A> iced_web::Application for Instance<A>
-where
-    A: Application,
-{
-    type Executor = A::Executor;
-    type Message = A::Message;
-    type Flags = A::Flags;
-
-    fn new(flags: Self::Flags) -> (Self, Command<A::Message>) {
-        let (app, command) = A::new(flags);
-
-        (Instance(app), command)
-    }
-
-    fn title(&self) -> String {
-        self.0.title()
-    }
-
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
-        self.0.update(message)
-    }
-
-    fn subscription(&self) -> Subscription<Self::Message> {
-        self.0.subscription()
-    }
-
-    fn view(&mut self) -> Element<'_, Self::Message> {
-        self.0.view()
     }
 }

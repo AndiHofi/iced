@@ -76,7 +76,7 @@ use crate::layout;
 use crate::mouse;
 use crate::overlay;
 use crate::renderer;
-use crate::{Clipboard, Hasher, Layout, Length, Point, Rectangle};
+use crate::{Clipboard, Hasher, Layout, Length, Point, Rectangle, Shell};
 
 /// A component that displays information and allows interaction.
 ///
@@ -94,12 +94,12 @@ use crate::{Clipboard, Hasher, Layout, Length, Point, Rectangle};
 /// - [`geometry`], a custom widget showcasing how to draw geometry with the
 /// `Mesh2D` primitive in [`iced_wgpu`].
 ///
-/// [examples]: https://github.com/hecrj/iced/tree/0.3/examples
-/// [`bezier_tool`]: https://github.com/hecrj/iced/tree/0.3/examples/bezier_tool
-/// [`custom_widget`]: https://github.com/hecrj/iced/tree/0.3/examples/custom_widget
-/// [`geometry`]: https://github.com/hecrj/iced/tree/0.3/examples/geometry
+/// [examples]: https://github.com/iced-rs/iced/tree/0.3/examples
+/// [`bezier_tool`]: https://github.com/iced-rs/iced/tree/0.3/examples/bezier_tool
+/// [`custom_widget`]: https://github.com/iced-rs/iced/tree/0.3/examples/custom_widget
+/// [`geometry`]: https://github.com/iced-rs/iced/tree/0.3/examples/geometry
 /// [`lyon`]: https://github.com/nical/lyon
-/// [`iced_wgpu`]: https://github.com/hecrj/iced/tree/0.3/wgpu
+/// [`iced_wgpu`]: https://github.com/iced-rs/iced/tree/0.3/wgpu
 pub trait Widget<Message, Renderer>
 where
     Renderer: crate::Renderer,
@@ -164,7 +164,7 @@ where
         _cursor_position: Point,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        _messages: &mut Vec<Message>,
+        _shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         event::Status::Ignored
     }
@@ -177,6 +177,7 @@ where
         _layout: Layout<'_>,
         _cursor_position: Point,
         _viewport: &Rectangle,
+        _renderer: &Renderer,
     ) -> mouse::Interaction {
         mouse::Interaction::Idle
     }
@@ -185,6 +186,7 @@ where
     fn overlay(
         &mut self,
         _layout: Layout<'_>,
+        _renderer: &Renderer,
     ) -> Option<overlay::Element<'_, Message, Renderer>> {
         None
     }

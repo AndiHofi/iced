@@ -8,7 +8,7 @@ use crate::touch;
 use crate::widget::Column;
 use crate::{
     Alignment, Background, Clipboard, Color, Element, Hasher, Layout, Length,
-    Padding, Point, Rectangle, Size, Vector, Widget,
+    Padding, Point, Rectangle, Shell, Size, Vector, Widget,
 };
 
 use std::{f32, hash::Hash, u32};
@@ -144,14 +144,14 @@ impl<'a, Message, Renderer: crate::Renderer> Scrollable<'a, Message, Renderer> {
         &self,
         bounds: Rectangle,
         content_bounds: Rectangle,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) {
         if content_bounds.height <= bounds.height {
             return;
         }
 
         if let Some(on_scroll) = &self.on_scroll {
-            messages.push(on_scroll(
+            shell.publish(on_scroll(
                 self.state.offset.absolute(bounds, content_bounds)
                     / (content_bounds.height - bounds.height),
             ));
@@ -199,7 +199,6 @@ impl<'a, Message, Renderer: crate::Renderer> Scrollable<'a, Message, Renderer> {
             Some(Scrollbar {
                 outer_bounds,
                 bounds: scrollbar_bounds,
-                margin: self.scrollbar_margin,
                 scroller: Scroller {
                     bounds: scroller_bounds,
                 },
@@ -251,7 +250,7 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         let bounds = layout.bounds();
         let is_mouse_over = bounds.contains(cursor_position);
@@ -286,7 +285,7 @@ where
                 cursor_position,
                 renderer,
                 clipboard,
-                messages,
+                shell,
             )
         };
 
@@ -307,7 +306,7 @@ where
                         }
                     }
 
-                    self.notify_on_scroll(bounds, content_bounds, messages);
+                    self.notify_on_scroll(bounds, content_bounds, shell);
 
                     return event::Status::Captured;
                 }
@@ -336,7 +335,7 @@ where
                                 self.notify_on_scroll(
                                     bounds,
                                     content_bounds,
-                                    messages,
+                                    shell,
                                 );
                             }
                         }
@@ -377,7 +376,7 @@ where
                             content_bounds,
                         );
 
-                        self.notify_on_scroll(bounds, content_bounds, messages);
+                        self.notify_on_scroll(bounds, content_bounds, shell);
 
                         return event::Status::Captured;
                     }
@@ -409,7 +408,7 @@ where
                             self.notify_on_scroll(
                                 bounds,
                                 content_bounds,
-                                messages,
+                                shell,
                             );
 
                             return event::Status::Captured;
@@ -428,6 +427,7 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         _viewport: &Rectangle,
+        renderer: &Renderer,
     ) -> mouse::Interaction {
         let bounds = layout.bounds();
         let content_layout = layout.children().next().unwrap();
@@ -458,6 +458,7 @@ where
                     y: bounds.y + offset as f32,
                     ..bounds
                 },
+                renderer,
             )
         }
     }
@@ -582,11 +583,12 @@ where
     fn overlay(
         &mut self,
         layout: Layout<'_>,
+        renderer: &Renderer,
     ) -> Option<overlay::Element<'_, Message, Renderer>> {
         let Self { content, state, .. } = self;
 
         content
-            .overlay(layout.children().next().unwrap())
+            .overlay(layout.children().next().unwrap(), renderer)
             .map(|overlay| {
                 let bounds = layout.bounds();
                 let content_layout = layout.children().next().unwrap();
@@ -719,9 +721,6 @@ struct Scrollbar {
 
     /// The bounds of the [`Scrollbar`].
     bounds: Rectangle,
-
-    /// The margin within the [`Scrollbar`].
-    margin: u16,
 
     /// The bounds of the [`Scroller`].
     scroller: Scroller,

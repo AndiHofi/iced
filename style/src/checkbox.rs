@@ -9,6 +9,7 @@ pub struct Style {
     pub border_radius: f32,
     pub border_width: f32,
     pub border_color: Color,
+    pub text_color: Option<Color>,
 }
 
 /// A set of rules that dictate the style of a checkbox.
@@ -28,6 +29,7 @@ impl StyleSheet for Default {
             border_radius: 5.0,
             border_width: 1.0,
             border_color: Color::from_rgb(0.6, 0.6, 0.6),
+            text_color: None,
         }
     }
 

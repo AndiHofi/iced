@@ -11,8 +11,8 @@ use crate::text;
 use crate::widget::container;
 use crate::widget::text::Text;
 use crate::{
-    Clipboard, Element, Event, Hasher, Layout, Length, Padding, Point, Size,
-    Vector, Widget,
+    Clipboard, Element, Event, Hasher, Layout, Length, Padding, Point, Shell,
+    Size, Vector, Widget,
 };
 
 /// An element to display a widget over another.
@@ -130,7 +130,7 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         self.content.widget.on_event(
             event,
@@ -138,7 +138,7 @@ where
             cursor_position,
             renderer,
             clipboard,
-            messages,
+            shell,
         )
     }
 
@@ -147,9 +147,14 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
+        renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.content
-            .mouse_interaction(layout, cursor_position, viewport)
+        self.content.mouse_interaction(
+            layout,
+            cursor_position,
+            viewport,
+            renderer,
+        )
     }
 
     fn draw(

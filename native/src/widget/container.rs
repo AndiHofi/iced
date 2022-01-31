@@ -9,7 +9,7 @@ use crate::overlay;
 use crate::renderer;
 use crate::{
     Background, Clipboard, Color, Element, Hasher, Layout, Length, Padding,
-    Point, Rectangle, Widget,
+    Point, Rectangle, Shell, Widget,
 };
 
 use std::u32;
@@ -167,7 +167,7 @@ where
         cursor_position: Point,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         self.content.widget.on_event(
             event,
@@ -175,7 +175,7 @@ where
             cursor_position,
             renderer,
             clipboard,
-            messages,
+            shell,
         )
     }
 
@@ -184,11 +184,13 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
+        renderer: &Renderer,
     ) -> mouse::Interaction {
         self.content.widget.mouse_interaction(
             layout.children().next().unwrap(),
             cursor_position,
             viewport,
+            renderer,
         )
     }
 
@@ -226,6 +228,8 @@ where
         self.height.hash(state);
         self.max_width.hash(state);
         self.max_height.hash(state);
+        self.horizontal_alignment.hash(state);
+        self.vertical_alignment.hash(state);
 
         self.content.hash_layout(state);
     }
@@ -233,8 +237,10 @@ where
     fn overlay(
         &mut self,
         layout: Layout<'_>,
+        renderer: &Renderer,
     ) -> Option<overlay::Element<'_, Message, Renderer>> {
-        self.content.overlay(layout.children().next().unwrap())
+        self.content
+            .overlay(layout.children().next().unwrap(), renderer)
     }
 }
 

@@ -16,7 +16,7 @@ use crate::image;
 /// A [`wgpu`] graphics backend for [`iced`].
 ///
 /// [`wgpu`]: https://github.com/gfx-rs/wgpu-rs
-/// [`iced`]: https://github.com/hecrj/iced
+/// [`iced`]: https://github.com/iced-rs/iced
 #[derive(Debug)]
 pub struct Backend {
     quad_pipeline: quad::Pipeline,
@@ -27,7 +27,6 @@ pub struct Backend {
     image_pipeline: image::Pipeline,
 
     default_text_size: u16,
-    primitive: Primitive,
 }
 
 impl Backend {
@@ -60,7 +59,6 @@ impl Backend {
             image_pipeline,
 
             default_text_size: settings.default_text_size,
-            primitive: Primitive::None,
         }
     }
 

@@ -5,7 +5,7 @@ authors = ["Héctor Ramón Jiménez <hector0193@gmail.com>"]
 edition = "2018"
 description = "A wgpu renderer for Iced"
 license = "MIT AND OFL-1.1"
-repository = "https://github.com/hecrj/iced"
+repository = "https://github.com/iced-rs/iced"
 
 [features]
 svg = ["resvg", "usvg", "tiny-skia"]
@@ -25,12 +25,13 @@ canvas = ["iced_graphics/canvas"]
 qr_code = ["iced_graphics/qr_code"]
 default_system_font = ["iced_graphics/font-source"]
 spirv = ["wgpu/spirv"]
+webgl = ["wgpu/webgl"]
 
 [dependencies]
-wgpu = "0.11"
-wgpu_glyph = "0.15"
+wgpu = "0.12"
+wgpu_glyph = "0.16"
 glyph_brush = "0.7"
-raw-window-handle = "0.3"
+raw-window-handle = "0.4"
 log = "0.4"
 guillotiere = "0.6"
 futures = "0.3"

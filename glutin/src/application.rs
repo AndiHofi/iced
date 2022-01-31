@@ -8,6 +8,7 @@ use iced_graphics::window;
 use iced_winit::conversion;
 use iced_winit::futures;
 use iced_winit::futures::channel::mpsc;
+use iced_winit::user_interface;
 use iced_winit::{application, Program};
 use iced_winit::{Cache, Clipboard, Debug, Proxy, Settings};
 
@@ -31,6 +32,7 @@ where
     use futures::task;
     use futures::Future;
     use glutin::event_loop::EventLoop;
+    use glutin::platform::run_return::EventLoopExtRunReturn;
     use glutin::ContextBuilder;
 
     let mut debug = Debug::new();
@@ -62,16 +64,30 @@ where
             settings.id,
         );
 
+        let opengl_builder = ContextBuilder::new()
         if let Some(configurator) = settings.window_configurator {
             let x: &EventLoopWindowTarget<<A as Program>::Message> =
                 event_loop.deref();
             window_builder = configurator.configure_builder(x, window_builder);
         }
 
-        let context = ContextBuilder::new()
+        let opengl_builder = ContextBuilder::new()
             .with_vsync(true)
-            .with_multisampling(C::sample_count(&compositor_settings) as u16)
-            .build_windowed(builder, &event_loop)
+            .with_multisampling(C::sample_count(&compositor_settings) as u16);
+
+        let opengles_builder = opengl_builder.clone().with_gl(
+            glutin::GlRequest::Specific(glutin::Api::OpenGlEs, (2, 0)),
+        );
+
+        let (first_builder, second_builder) = if settings.try_opengles_first {
+            (opengles_builder, opengl_builder)
+        } else {
+            (opengl_builder, opengles_builder)
+        };
+
+        let context = first_builder
+            .build_windowed(builder.clone(), &event_loop)
+            .or_else(|_| second_builder.build_windowed(builder, &event_loop))
             .map_err(|error| {
                 use glutin::CreationError;
 
@@ -160,12 +176,6 @@ where
         }
     });
 
-    if let Some(on_exit) = on_exit {
-        on_exit();
-    } else {
-        std::process::exit(0);
-    }
-
     Ok(())
 }
 
@@ -193,7 +203,7 @@ async fn run_instance<A, E, C>(
     let mut user_interface =
         ManuallyDrop::new(application::build_user_interface(
             &mut application,
-            Cache::default(),
+            user_interface::Cache::default(),
             &mut renderer,
             state.logical_size(),
             &mut debug,
@@ -214,7 +224,7 @@ async fn run_instance<A, E, C>(
 
                 debug.event_processing_started();
 
-                let statuses = user_interface.update(
+                let (interface_state, statuses) = user_interface.update(
                     &events,
                     state.cursor_position(),
                     &mut renderer,
@@ -228,7 +238,12 @@ async fn run_instance<A, E, C>(
                     runtime.broadcast(event);
                 }
 
-                if !messages.is_empty() {
+                if !messages.is_empty()
+                    || matches!(
+                        interface_state,
+                        user_interface::State::Outdated
+                    )
+                {
                     let cache =
                         ManuallyDrop::into_inner(user_interface).into_cache();
 

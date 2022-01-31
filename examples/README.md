@@ -2,7 +2,7 @@
 __Iced moves fast and the `master` branch can contain breaking changes!__ If
 you want to learn about a specific release, check out [the release list].
 
-[the release list]: https://github.com/hecrj/iced/releases
+[the release list]: https://github.com/iced-rs/iced/releases
 
 ## [Tour](tour)
 A simple UI tour that can run both on native platforms and the web! It showcases different widgets that can be built using Iced.
@@ -18,7 +18,7 @@ The __[`main`](tour/src/main.rs)__ file contains all the code of the example! Al
 [`iced_winit`]: ../winit
 [`iced_native`]: ../native
 [`iced_wgpu`]: ../wgpu
-[`iced_web`]: ../web
+[`iced_web`]: https://github.com/iced-rs/iced_web
 [`winit`]: https://github.com/rust-windowing/winit
 [`wgpu`]: https://github.com/gfx-rs/wgpu-rs
 
@@ -29,7 +29,7 @@ cargo run --package tour
 
 The web version can be run by following [the usage instructions of `iced_web`] or by accessing [iced.rs](https://iced.rs/)!
 
-[the usage instructions of `iced_web`]: ../web#usage
+[the usage instructions of `iced_web`]: https://github.com/iced-rs/iced_web#usage
 
 ## [Todos](todos)
 A todos tracker inspired by [TodoMVC]. It showcases dynamic layout, text input, checkboxes, scrollables, icons, and async actions! It automatically saves your tasks in the background, even if you did not finish typing them.

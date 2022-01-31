@@ -10,8 +10,8 @@ use crate::text;
 use crate::touch;
 use crate::widget::{self, Row, Text};
 use crate::{
-    Alignment, Clipboard, Color, Element, Hasher, Layout, Length, Point,
-    Rectangle, Widget,
+    Alignment, Clipboard, Element, Hasher, Layout, Length, Point, Rectangle,
+    Shell, Widget,
 };
 
 pub use iced_style::checkbox::{Style, StyleSheet};
@@ -32,7 +32,7 @@ pub use iced_style::checkbox::{Style, StyleSheet};
 /// Checkbox::new(is_checked, "Toggle me!", Message::CheckboxToggled);
 /// ```
 ///
-/// ![Checkbox drawn by `iced_wgpu`](https://github.com/hecrj/iced/blob/7760618fb112074bc40b148944521f312152012a/docs/images/checkbox.png?raw=true)
+/// ![Checkbox drawn by `iced_wgpu`](https://github.com/iced-rs/iced/blob/7760618fb112074bc40b148944521f312152012a/docs/images/checkbox.png?raw=true)
 #[allow(missing_debug_implementations)]
 pub struct Checkbox<'a, Message, Renderer: text::Renderer> {
     is_checked: bool,
@@ -43,7 +43,6 @@ pub struct Checkbox<'a, Message, Renderer: text::Renderer> {
     spacing: u16,
     text_size: Option<u16>,
     font: Renderer::Font,
-    text_color: Option<Color>,
     style_sheet: Box<dyn StyleSheet + 'a>,
 }
 
@@ -75,7 +74,6 @@ impl<'a, Message, Renderer: text::Renderer> Checkbox<'a, Message, Renderer> {
             spacing: Self::DEFAULT_SPACING,
             text_size: None,
             font: Renderer::Font::default(),
-            text_color: None,
             style_sheet: Default::default(),
         }
     }
@@ -109,12 +107,6 @@ impl<'a, Message, Renderer: text::Renderer> Checkbox<'a, Message, Renderer> {
     /// [`Font`]: crate::widget::text::Renderer::Font
     pub fn font(mut self, font: Renderer::Font) -> Self {
         self.font = font;
-        self
-    }
-
-    /// Sets the text color of the [`Checkbox`] button.
-    pub fn text_color(mut self, color: Color) -> Self {
-        self.text_color = Some(color);
         self
     }
 
@@ -157,7 +149,7 @@ where
             )
             .push(
                 Text::new(&self.label)
-                    .font(self.font)
+                    .font(self.font.clone())
                     .width(self.width)
                     .size(self.text_size.unwrap_or(renderer.default_size())),
             )
@@ -171,7 +163,7 @@ where
         cursor_position: Point,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        messages: &mut Vec<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
@@ -179,7 +171,7 @@ where
                 let mouse_over = layout.bounds().contains(cursor_position);
 
                 if mouse_over {
-                    messages.push((self.on_toggle)(!self.is_checked));
+                    shell.publish((self.on_toggle)(!self.is_checked));
 
                     return event::Status::Captured;
                 }
@@ -195,6 +187,7 @@ where
         layout: Layout<'_>,
         cursor_position: Point,
         _viewport: &Rectangle,
+        _renderer: &Renderer,
     ) -> mouse::Interaction {
         if layout.bounds().contains(cursor_position) {
             mouse::Interaction::Pointer
@@ -216,24 +209,24 @@ where
 
         let mut children = layout.children();
 
+        let custom_style = if is_mouse_over {
+            self.style_sheet.hovered(self.is_checked)
+        } else {
+            self.style_sheet.active(self.is_checked)
+        };
+
         {
             let layout = children.next().unwrap();
             let bounds = layout.bounds();
 
-            let style = if is_mouse_over {
-                self.style_sheet.hovered(self.is_checked)
-            } else {
-                self.style_sheet.active(self.is_checked)
-            };
-
             renderer.fill_quad(
                 renderer::Quad {
                     bounds,
-                    border_radius: style.border_radius,
-                    border_width: style.border_width,
-                    border_color: style.border_color,
+                    border_radius: custom_style.border_radius,
+                    border_width: custom_style.border_width,
+                    border_color: custom_style.border_color,
                 },
-                style.background,
+                custom_style.background,
             );
 
             if self.is_checked {
@@ -246,7 +239,7 @@ where
                         y: bounds.center_y(),
                         ..bounds
                     },
-                    color: style.checkmark_color,
+                    color: custom_style.checkmark_color,
                     horizontal_alignment: alignment::Horizontal::Center,
                     vertical_alignment: alignment::Vertical::Center,
                 });
@@ -261,9 +254,9 @@ where
                 style,
                 label_layout,
                 &self.label,
-                self.font,
+                self.font.clone(),
                 self.text_size,
-                self.text_color,
+                custom_style.text_color,
                 alignment::Horizontal::Left,
                 alignment::Vertical::Center,
             );
