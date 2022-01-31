@@ -49,7 +49,7 @@ where
         let bounds = limits.max();
 
         let (width, height) =
-            renderer.measure(&self.text, size, self.font, bounds);
+            renderer.measure(&self.text, size, self.font.clone(), bounds);
 
         let size = limits.resolve(Size::new(width, height));
 
@@ -69,7 +69,7 @@ where
             style,
             layout,
             self.text.as_ref(),
-            self.font,
+            self.font.clone(),
             self.size,
             self.color,
             self.horizontal_alignment,

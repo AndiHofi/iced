@@ -105,15 +105,6 @@ pub trait Application: Program {
     fn should_exit(&self) -> bool {
         false
     }
-
-    /// Get a callback function that is invoked before exiting the window event loop
-    ///
-    /// Is invoked before entering the event loop, and after the initial command has been processed
-    ///
-    /// By default, the returned function does nothing
-    fn on_exit(&mut self) -> Option<Box<dyn FnOnce()>> {
-        None
-    }
 }
 
 /// Runs an [`Application`] with an executor, compositor, and the provided
@@ -221,8 +212,6 @@ where
 
     let (mut sender, receiver) = mpsc::unbounded();
 
-    let on_exit = application.on_exit();
-
     let mut instance = Box::pin(run_instance::<A, E, C>(
         application,
         compositor,
@@ -238,7 +227,7 @@ where
 
     let mut context = task::Context::from_waker(task::noop_waker_ref());
 
-    event_loop.run_return(move |event, _, control_flow| {
+    platform::run(event_loop, move |event, _, control_flow| {
         use winit::event_loop::ControlFlow;
 
         if let ControlFlow::Exit = control_flow {
@@ -270,9 +259,7 @@ where
                 task::Poll::Ready(_) => ControlFlow::Exit,
             };
         }
-    });
-
-    Ok(())
+    })
 }
 
 async fn run_instance<A, E, C>(

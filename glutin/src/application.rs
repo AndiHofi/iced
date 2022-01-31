@@ -5,23 +5,20 @@ use crate::{Error, Executor, Runtime};
 pub use iced_winit::Application;
 
 use iced_graphics::window;
+use iced_winit::application;
 use iced_winit::conversion;
 use iced_winit::futures;
 use iced_winit::futures::channel::mpsc;
 use iced_winit::user_interface;
-use iced_winit::{application, Program};
-use iced_winit::{Cache, Clipboard, Debug, Proxy, Settings};
+use iced_winit::{Clipboard, Debug, Proxy, Settings};
 
-use crate::glutin::event_loop::EventLoopWindowTarget;
-use crate::glutin::platform::run_return::EventLoopExtRunReturn;
 use glutin::window::Window;
 use std::mem::ManuallyDrop;
-use std::ops::Deref;
 
 /// Runs an [`Application`] with an executor, compositor, and the provided
 /// settings.
 pub fn run<A, E, C>(
-    settings: Settings<A::Flags, <A as Program>::Message>,
+    settings: Settings<A::Flags>,
     compositor_settings: C::Settings,
 ) -> Result<(), Error>
 where
@@ -48,7 +45,7 @@ where
         Runtime::new(executor, proxy)
     };
 
-    let (mut application, init_command) = {
+    let (application, init_command) = {
         let flags = settings.flags;
 
         runtime.enter(|| A::new(flags))
@@ -63,13 +60,6 @@ where
             event_loop.primary_monitor(),
             settings.id,
         );
-
-        let opengl_builder = ContextBuilder::new()
-        if let Some(configurator) = settings.window_configurator {
-            let x: &EventLoopWindowTarget<<A as Program>::Message> =
-                event_loop.deref();
-            window_builder = configurator.configure_builder(x, window_builder);
-        }
 
         let opengl_builder = ContextBuilder::new()
             .with_vsync(true)
@@ -124,8 +114,6 @@ where
     runtime.track(subscription);
 
     let (mut sender, receiver) = mpsc::unbounded();
-
-    let on_exit = application.on_exit();
 
     let mut instance = Box::pin(run_instance::<A, E, C>(
         application,
