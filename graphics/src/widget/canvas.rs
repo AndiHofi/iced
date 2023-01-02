@@ -3,30 +3,20 @@
 //! A [`Canvas`] widget can be used to draw different kinds of 2D shapes in a
 //! [`Frame`]. It can be used for animation, data visualization, game graphics,
 //! and more!
-use crate::renderer::{self, Renderer};
-use crate::{Backend, Primitive};
-
-use iced_native::layout;
-use iced_native::mouse;
-use iced_native::{
-    Clipboard, Element, Hasher, Layout, Length, Point, Rectangle, Shell, Size,
-    Vector, Widget,
-};
-use std::hash::Hash;
-use std::marker::PhantomData;
-
 pub mod event;
+pub mod fill;
 pub mod path;
+pub mod stroke;
 
 mod cache;
 mod cursor;
-mod fill;
 mod frame;
 mod geometry;
 mod program;
-mod stroke;
+mod style;
 mod text;
 
+pub use crate::gradient::{self, Gradient};
 pub use cache::Cache;
 pub use cursor::Cursor;
 pub use event::Event;
@@ -35,37 +25,36 @@ pub use frame::Frame;
 pub use geometry::Geometry;
 pub use path::Path;
 pub use program::Program;
-pub use stroke::{LineCap, LineJoin, Stroke};
+pub use stroke::{LineCap, LineDash, LineJoin, Stroke};
+pub use style::Style;
 pub use text::Text;
 
+use crate::{Backend, Primitive, Renderer};
+
+use iced_native::layout::{self, Layout};
+use iced_native::mouse;
+use iced_native::renderer;
+use iced_native::widget::tree::{self, Tree};
+use iced_native::{
+    Clipboard, Element, Length, Point, Rectangle, Shell, Size, Vector, Widget,
+};
+
+use std::marker::PhantomData;
+
 /// A widget capable of drawing 2D graphics.
-///
-/// # Examples
-/// The repository has a couple of [examples] showcasing how to use a
-/// [`Canvas`]:
-///
-/// - [`clock`], an application that uses the [`Canvas`] widget to draw a clock
-/// and its hands to display the current time.
-/// - [`game_of_life`], an interactive version of the Game of Life, invented by
-/// John Conway.
-/// - [`solar_system`], an animated solar system drawn using the [`Canvas`] widget
-/// and showcasing how to compose different transforms.
-///
-/// [examples]: https://github.com/hecrj/iced/tree/master/examples
-/// [`clock`]: https://github.com/hecrj/iced/tree/master/examples/clock
-/// [`game_of_life`]: https://github.com/hecrj/iced/tree/master/examples/game_of_life
-/// [`solar_system`]: https://github.com/hecrj/iced/tree/master/examples/solar_system
 ///
 /// ## Drawing a simple circle
 /// If you want to get a quick overview, here's how we can draw a simple circle:
 ///
 /// ```no_run
 /// # mod iced {
-/// #     pub use iced_graphics::canvas;
-/// #     pub use iced_native::{Color, Rectangle};
+/// #     pub mod widget {
+/// #         pub use iced_graphics::widget::canvas;
+/// #     }
+/// #     pub use iced_native::{Color, Rectangle, Theme};
 /// # }
-/// use iced::canvas::{self, Canvas, Cursor, Fill, Frame, Geometry, Path, Program};
-/// use iced::{Color, Rectangle};
+/// use iced::widget::canvas::{self, Canvas, Cursor, Fill, Frame, Geometry, Path, Program};
+/// use iced::{Color, Rectangle, Theme};
 ///
 /// // First, we define the data we need for drawing
 /// #[derive(Debug)]
@@ -75,7 +64,9 @@ pub use text::Text;
 ///
 /// // Then, we implement the `Program` trait
 /// impl Program<()> for Circle {
-///     fn draw(&self, bounds: Rectangle, _cursor: Cursor) -> Vec<Geometry>{
+///     type State = ();
+///
+///     fn draw(&self, _state: &(), _theme: &Theme, bounds: Rectangle, _cursor: Cursor) -> Vec<Geometry>{
 ///         // We prepare a new `Frame`
 ///         let mut frame = Frame::new(bounds.size());
 ///
@@ -94,14 +85,21 @@ pub use text::Text;
 /// let canvas = Canvas::new(Circle { radius: 50.0 });
 /// ```
 #[derive(Debug)]
-pub struct Canvas<Message, P: Program<Message>> {
+pub struct Canvas<Message, Theme, P>
+where
+    P: Program<Message, Theme>,
+{
     width: Length,
     height: Length,
     program: P,
-    phantom: PhantomData<Message>,
+    message_: PhantomData<Message>,
+    theme_: PhantomData<Theme>,
 }
 
-impl<Message, P: Program<Message>> Canvas<Message, P> {
+impl<Message, Theme, P> Canvas<Message, Theme, P>
+where
+    P: Program<Message, Theme>,
+{
     const DEFAULT_SIZE: u16 = 100;
 
     /// Creates a new [`Canvas`].
@@ -110,7 +108,8 @@ impl<Message, P: Program<Message>> Canvas<Message, P> {
             width: Length::Units(Self::DEFAULT_SIZE),
             height: Length::Units(Self::DEFAULT_SIZE),
             program,
-            phantom: PhantomData,
+            message_: PhantomData,
+            theme_: PhantomData,
         }
     }
 
@@ -127,11 +126,20 @@ impl<Message, P: Program<Message>> Canvas<Message, P> {
     }
 }
 
-impl<Message, P, B> Widget<Message, Renderer<B>> for Canvas<Message, P>
+impl<Message, P, B, T> Widget<Message, Renderer<B, T>> for Canvas<Message, T, P>
 where
-    P: Program<Message>,
+    P: Program<Message, T>,
     B: Backend,
 {
+    fn tag(&self) -> tree::Tag {
+        struct Tag<T>(T);
+        tree::Tag::of::<Tag<P::State>>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(P::State::default())
+    }
+
     fn width(&self) -> Length {
         self.width
     }
@@ -142,7 +150,7 @@ where
 
     fn layout(
         &self,
-        _renderer: &Renderer<B>,
+        _renderer: &Renderer<B, T>,
         limits: &layout::Limits,
     ) -> layout::Node {
         let limits = limits.width(self.width).height(self.height);
@@ -153,10 +161,11 @@ where
 
     fn on_event(
         &mut self,
+        tree: &mut Tree,
         event: iced_native::Event,
         layout: Layout<'_>,
         cursor_position: Point,
-        _renderer: &Renderer<B>,
+        _renderer: &Renderer<B, T>,
         _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
     ) -> event::Status {
@@ -165,6 +174,9 @@ where
         let canvas_event = match event {
             iced_native::Event::Mouse(mouse_event) => {
                 Some(Event::Mouse(mouse_event))
+            }
+            iced_native::Event::Touch(touch_event) => {
+                Some(Event::Touch(touch_event))
             }
             iced_native::Event::Keyboard(keyboard_event) => {
                 Some(Event::Keyboard(keyboard_event))
@@ -175,8 +187,10 @@ where
         let cursor = Cursor::from_window_position(cursor_position);
 
         if let Some(canvas_event) = canvas_event {
+            let state = tree.state.downcast_mut::<P::State>();
+
             let (event_status, message) =
-                self.program.update(canvas_event, bounds, cursor);
+                self.program.update(state, canvas_event, bounds, cursor);
 
             if let Some(message) = message {
                 shell.publish(message);
@@ -190,20 +204,24 @@ where
 
     fn mouse_interaction(
         &self,
+        tree: &Tree,
         layout: Layout<'_>,
         cursor_position: Point,
         _viewport: &Rectangle,
-        _renderer: &Renderer<B>,
+        _renderer: &Renderer<B, T>,
     ) -> mouse::Interaction {
         let bounds = layout.bounds();
         let cursor = Cursor::from_window_position(cursor_position);
+        let state = tree.state.downcast_ref::<P::State>();
 
-        self.program.mouse_interaction(bounds, cursor)
+        self.program.mouse_interaction(state, bounds, cursor)
     }
 
     fn draw(
         &self,
-        renderer: &mut Renderer<B>,
+        tree: &Tree,
+        renderer: &mut Renderer<B, T>,
+        theme: &T,
         _style: &renderer::Style,
         layout: Layout<'_>,
         cursor_position: Point,
@@ -212,38 +230,39 @@ where
         use iced_native::Renderer as _;
 
         let bounds = layout.bounds();
+
+        if bounds.width < 1.0 || bounds.height < 1.0 {
+            return;
+        }
+
         let translation = Vector::new(bounds.x, bounds.y);
         let cursor = Cursor::from_window_position(cursor_position);
+        let state = tree.state.downcast_ref::<P::State>();
 
         renderer.with_translation(translation, |renderer| {
             renderer.draw_primitive(Primitive::Group {
                 primitives: self
                     .program
-                    .draw(bounds, cursor)
+                    .draw(state, theme, bounds, cursor)
                     .into_iter()
                     .map(Geometry::into_primitive)
                     .collect(),
             });
         });
     }
-
-    fn hash_layout(&self, state: &mut Hasher) {
-        struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
-
-        self.width.hash(state);
-        self.height.hash(state);
-    }
 }
 
-impl<'a, Message, P, B> From<Canvas<Message, P>>
-    for Element<'a, Message, Renderer<B>>
+impl<'a, Message, P, B, T> From<Canvas<Message, T, P>>
+    for Element<'a, Message, Renderer<B, T>>
 where
-    Message: 'static,
-    P: Program<Message> + 'a,
+    Message: 'a,
+    P: Program<Message, T> + 'a,
     B: Backend,
+    T: 'a,
 {
-    fn from(canvas: Canvas<Message, P>) -> Element<'a, Message, Renderer<B>> {
+    fn from(
+        canvas: Canvas<Message, T, P>,
+    ) -> Element<'a, Message, Renderer<B, T>> {
         Element::new(canvas)
     }
 }

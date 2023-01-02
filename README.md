@@ -2,13 +2,13 @@
 
 <img src="docs/logo.svg" width="140px" />
 
-# iced
+# Iced
 
 [![Documentation](https://docs.rs/iced/badge.svg)][documentation]
 [![Crates.io](https://img.shields.io/crates/v/iced.svg)](https://crates.io/crates/iced)
-[![License](https://img.shields.io/crates/l/iced.svg)](https://github.com/hecrj/iced/blob/master/LICENSE)
+[![License](https://img.shields.io/crates/l/iced.svg)](https://github.com/iced-rs/iced/blob/master/LICENSE)
 [![Downloads](https://img.shields.io/crates/d/iced.svg)](https://crates.io/crates/iced)
-[![Test Status](https://github.com/hecrj/iced/workflows/Test/badge.svg?event=push)](https://github.com/hecrj/iced/actions)
+[![Test Status](https://img.shields.io/github/workflow/status/iced-rs/iced/Test?event=push&label=test)](https://github.com/iced-rs/iced/actions)
 [![Discord Server](https://img.shields.io/discord/628993209984614400?label=&labelColor=6A7EC2&logo=discord&logoColor=ffffff&color=7389D8)](https://discord.gg/3xZJ65GAhd)
 
 A cross-platform GUI library for Rust focused on simplicity and type-safety.
@@ -18,72 +18,78 @@ Inspired by [Elm].
   <img src="https://thumbs.gfycat.com/LittleSaneHalicore-small.gif" height="350px">
 </a>
 <a href="https://gfycat.com/politeadorableiberianmole">
-  <img src="https://thumbs.gfycat.com/PoliteAdorableIberianmole-small.gif">
+  <img src="https://thumbs.gfycat.com/PoliteAdorableIberianmole-small.gif" height="350px">
 </a>
 
 </div>
 
 ## Features
-  * Simple, easy-to-use, batteries-included API
-  * Type-safe, reactive programming model
-  * [Cross-platform support] (Windows, macOS, Linux, and [the Web])
-  * Responsive layout
-  * Built-in widgets (including [text inputs], [scrollables], and more!)
-  * Custom widget support (create your own!)
-  * [Debug overlay with performance metrics]
-  * First-class support for async actions (use futures!)
-  * [Modular ecosystem] split into reusable parts:
-    * A [renderer-agnostic native runtime] enabling integration with existing systems
-    * Two [built-in renderers] leveraging [`wgpu`] and [`glow`]
-      * [`iced_wgpu`] supporting Vulkan, Metal and DX12
-      * [`iced_glow`] supporting OpenGL 2.1+ and OpenGL ES 2.0+
-    * A [windowing shell]
-    * A [web runtime] leveraging the DOM
 
-__iced is currently experimental software.__ [Take a look at the roadmap],
+* Simple, easy-to-use, batteries-included API
+* Type-safe, reactive programming model
+* [Cross-platform support] (Windows, macOS, Linux, and [the Web])
+* Responsive layout
+* Built-in widgets (including [text inputs], [scrollables], and more!)
+* Custom widget support (create your own!)
+* [Debug overlay with performance metrics]
+* First-class support for async actions (use futures!)
+* [Modular ecosystem] split into reusable parts:
+  * A [renderer-agnostic native runtime] enabling integration with existing systems
+  * Two [built-in renderers] leveraging [`wgpu`] and [`glow`]
+    * [`iced_wgpu`] supporting Vulkan, Metal and DX12
+    * [`iced_glow`] supporting OpenGL 2.1+ and OpenGL ES 2.0+
+  * A [windowing shell]
+  * A [web runtime] leveraging the DOM
+
+__Iced is currently experimental software.__ [Take a look at the roadmap],
 [check out the issues], and [feel free to contribute!]
 
-[Cross-platform support]: https://github.com/hecrj/iced/blob/master/docs/images/todos_desktop.jpg?raw=true
-[the Web]: https://iced.rs/
+[Cross-platform support]: https://raw.githubusercontent.com/iced-rs/iced/master/docs/images/todos_desktop.jpg
+[the Web]: https://github.com/iced-rs/iced_web
 [text inputs]: https://gfycat.com/alertcalmcrow-rust-gui
 [scrollables]: https://gfycat.com/perkybaggybaboon-rust-gui
 [Debug overlay with performance metrics]: https://gfycat.com/incredibledarlingbee
-[Modular ecosystem]: https://github.com/hecrj/iced/blob/master/ECOSYSTEM.md
-[renderer-agnostic native runtime]: https://github.com/hecrj/iced/tree/master/native
-[`wgpu`]: https://github.com/gfx-rs/wgpu-rs
+[Modular ecosystem]: ECOSYSTEM.md
+[renderer-agnostic native runtime]: native/
+[`wgpu`]: https://github.com/gfx-rs/wgpu
 [`glow`]: https://github.com/grovesNL/glow
-[`iced_wgpu`]: https://github.com/hecrj/iced/tree/master/wgpu
-[`iced_glow`]: https://github.com/hecrj/iced/tree/master/glow
-[built-in renderers]: https://github.com/hecrj/iced/blob/master/ECOSYSTEM.md#Renderers
-[windowing shell]: https://github.com/hecrj/iced/tree/master/winit
+[`iced_wgpu`]: wgpu/
+[`iced_glow`]: glow/
+[built-in renderers]: ECOSYSTEM.md#Renderers
+[windowing shell]: winit/
 [`dodrio`]: https://github.com/fitzgen/dodrio
-[web runtime]: https://github.com/hecrj/iced/tree/master/web
-[Take a look at the roadmap]: https://github.com/hecrj/iced/blob/master/ROADMAP.md
-[check out the issues]: https://github.com/hecrj/iced/issues
+[web runtime]: https://github.com/iced-rs/iced_web
+[Take a look at the roadmap]: ROADMAP.md
+[check out the issues]: https://github.com/iced-rs/iced/issues
 [feel free to contribute!]: #contributing--feedback
 
 ## Installation
+
 Add `iced` as a dependency in your `Cargo.toml`:
 
 ```toml
-iced = "0.3"
+iced = "0.6"
 ```
 
-__iced moves fast and the `master` branch can contain breaking changes!__ If
+If your project is using a Rust edition older than 2021, then you will need to
+set `resolver = "2"` in the `[package]` section as well.
+
+__Iced moves fast and the `master` branch can contain breaking changes!__ If
 you want to learn about a specific release, check out [the release list].
 
-[the release list]: https://github.com/hecrj/iced/releases
+[the release list]: https://github.com/iced-rs/iced/releases
 
 ## Overview
-Inspired by [The Elm Architecture], iced expects you to split user interfaces
+
+Inspired by [The Elm Architecture], Iced expects you to split user interfaces
 into four different concepts:
 
-  * __State__ — the state of your application
-  * __Messages__ — user interactions or meaningful events that you care
+* __State__ — the state of your application
+* __Messages__ — user interactions or meaningful events that you care
   about
-  * __View logic__ — a way to display your __state__ as widgets that
+* __View logic__ — a way to display your __state__ as widgets that
   may produce __messages__ on user interaction
-  * __Update logic__ — a way to react to __messages__ and update your
+* __Update logic__ — a way to react to __messages__ and update your
   __state__
 
 We can build something to see how this works! Let's say we want a simple counter
@@ -92,15 +98,9 @@ that can be incremented and decremented using two buttons.
 We start by modelling the __state__ of our application:
 
 ```rust
-use iced::button;
-
 struct Counter {
     // The counter value
     value: i32,
-
-    // The local state of the two buttons
-    increment_button: button::State,
-    decrement_button: button::State,
 }
 ```
 
@@ -119,28 +119,23 @@ Now, let's show the actual counter by putting it all together in our
 __view logic__:
 
 ```rust
-use iced::{Button, Column, Text};
+use iced::widget::{button, column, text, Column};
 
 impl Counter {
-    pub fn view(&mut self) -> Column<Message> {
+    pub fn view(&self) -> Column<Message> {
         // We use a column: a simple vertical layout
-        Column::new()
-            .push(
-                // The increment button. We tell it to produce an
-                // `IncrementPressed` message when pressed
-                Button::new(&mut self.increment_button, Text::new("+"))
-                    .on_press(Message::IncrementPressed),
-            )
-            .push(
-                // We show the value of the counter here
-                Text::new(self.value.to_string()).size(50),
-            )
-            .push(
-                // The decrement button. We tell it to produce a
-                // `DecrementPressed` message when pressed
-                Button::new(&mut self.decrement_button, Text::new("-"))
-                    .on_press(Message::DecrementPressed),
-            )
+        column![
+            // The increment button. We tell it to produce an
+            // `IncrementPressed` message when pressed
+            button("+").on_press(Message::IncrementPressed),
+
+            // We show the value of the counter here
+            text(self.value).size(50),
+
+            // The decrement button. We tell it to produce a
+            // `DecrementPressed` message when pressed
+            button("-").on_press(Message::DecrementPressed),
+        ]
     }
 }
 ```
@@ -165,7 +160,7 @@ impl Counter {
 }
 ```
 
-And that's everything! We just wrote a whole user interface. iced is now able
+And that's everything! We just wrote a whole user interface. Iced is now able
 to:
 
   1. Take the result of our __view logic__ and layout its widgets.
@@ -176,7 +171,8 @@ to:
 Browse the [documentation] and the [examples] to learn more!
 
 ## Implementation details
-iced was originally born as an attempt at bringing the simplicity of [Elm] and
+
+Iced was originally born as an attempt at bringing the simplicity of [Elm] and
 [The Elm Architecture] into [Coffee], a 2D game engine I am working on.
 
 The core of the library was implemented during May 2019 in [this pull request].
@@ -188,45 +184,48 @@ Since then, the focus has shifted towards providing a batteries-included,
 end-user-oriented GUI library, while keeping [the ecosystem] modular:
 
 <p align="center">
-  <a href="https://github.com/hecrj/iced/blob/master/ECOSYSTEM.md">
-    <img alt="iced ecosystem" src="docs/graphs/ecosystem.png" width="80%">
+  <a href="ECOSYSTEM.md">
+    <img alt="The Iced Ecosystem" src="docs/graphs/ecosystem.png" width="80%">
   </a>
 </p>
 
 [this pull request]: https://github.com/hecrj/coffee/pull/35
-[The first alpha version]: https://github.com/hecrj/iced/tree/0.1.0-alpha
+[The first alpha version]: https://github.com/iced-rs/iced/tree/0.1.0-alpha
 [a renderer-agnostic GUI library]: https://www.reddit.com/r/rust/comments/czzjnv/iced_a_rendereragnostic_gui_library_focused_on/
-[tour example]: https://github.com/hecrj/iced/blob/master/examples/README.md#tour
+[tour example]: examples/README.md#tour
 [`ggez`]: https://github.com/ggez/ggez
-[the ecosystem]: https://github.com/hecrj/iced/blob/master/ECOSYSTEM.md
+[the ecosystem]: ECOSYSTEM.md
 
-## Common problems
+## Troubleshooting
 
-1. `Error: GraphicsAdapterNotFound`
-   
-   This occurs when the selected [built-in renderer] is not able to create a context.
-   
-   Often this will occur while using [`iced_wgpu`] as the renderer without
-   supported hardware (needs Vulkan, Metal or DX12). In this case, you could try using the
-   [`iced_glow`] renderer:
+### `GraphicsAdapterNotFound`
 
-   First, check if it works with
-   ```console
-   $ cargo run --features "iced/glow iced/glow_canvas" --package game_of_life
-   ```
+This occurs when the selected [built-in renderer] is not able to create a context.
 
-   and then use it in your project with
-   ```toml
-   iced = { version = "0.3", default-features = false, features = ["glow"] }
-   ```
+Often this will occur while using [`iced_wgpu`] as the renderer without
+supported hardware (needs Vulkan, Metal or DX12). In this case, you could try using the
+[`iced_glow`] renderer:
 
-   **NOTE:** Chances are you have hardware that supports at least OpenGL 2.1 or OpenGL ES 2.0,
-   but if you don't, right now there's no software fallback, so it means your hardware
-   doesn't support Iced.
+First, check if it works with
 
-[built-in renderer]: https://github.com/hecrj/iced/blob/master/ECOSYSTEM.md#Renderers
+```console
+cargo run --features iced/glow --package game_of_life
+```
+
+and then use it in your project with
+
+```toml
+iced = { version = "0.6", default-features = false, features = ["glow"] }
+```
+
+__NOTE:__ Chances are you have hardware that supports at least OpenGL 2.1 or OpenGL ES 2.0,
+but if you don't, right now there's no software fallback, so it means your hardware
+doesn't support Iced.
+
+[built-in renderer]: https://github.com/iced-rs/iced/blob/master/ECOSYSTEM.md#Renderers
 
 ## Contributing / Feedback
+
 Contributions are greatly appreciated! If you want to contribute, please
 read our [contributing guidelines] for more details.
 
@@ -236,15 +235,16 @@ awesome folks) over the `#games-and-graphics` and `#gui-and-ui` channels in
 the [Rust Community Discord]. I go by `lone_scientist#9554` there.
 
 ## Sponsors
-The development of iced is sponsored by the [Cryptowatch] team at [Kraken.com]
+
+The development of Iced is sponsored by the [Cryptowatch] team at [Kraken.com]
 
 [documentation]: https://docs.rs/iced/
-[examples]: https://github.com/hecrj/iced/tree/master/examples
+[examples]: https://github.com/iced-rs/iced/tree/master/examples
 [Coffee]: https://github.com/hecrj/coffee
 [Elm]: https://elm-lang.org/
 [The Elm Architecture]: https://guide.elm-lang.org/architecture/
-[the current issues]: https://github.com/hecrj/iced/issues
-[contributing guidelines]: https://github.com/hecrj/iced/blob/master/CONTRIBUTING.md
+[the current issues]: https://github.com/iced-rs/iced/issues
+[contributing guidelines]: https://github.com/iced-rs/iced/blob/master/CONTRIBUTING.md
 [Discord server]: https://discord.gg/3xZJ65GAhd
 [Rust Community Discord]: https://bit.ly/rust-community
 [Cryptowatch]: https://cryptowat.ch/charts

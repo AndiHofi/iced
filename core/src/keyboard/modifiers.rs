@@ -5,7 +5,7 @@ bitflags! {
     #[derive(Default)]
     pub struct Modifiers: u32{
         /// The "shift" key.
-        const SHIFT = 0b100 << 0;
+        const SHIFT = 0b100;
         // const LSHIFT = 0b010 << 0;
         // const RSHIFT = 0b001 << 0;
         //
@@ -41,21 +41,29 @@ impl Modifiers {
     };
 
     /// Returns true if the [`SHIFT`] key is pressed in the [`Modifiers`].
+    ///
+    /// [`SHIFT`]: Self::SHIFT
     pub fn shift(self) -> bool {
         self.contains(Self::SHIFT)
     }
 
     /// Returns true if the [`CTRL`] key is pressed in the [`Modifiers`].
+    ///
+    /// [`CTRL`]: Self::CTRL
     pub fn control(self) -> bool {
         self.contains(Self::CTRL)
     }
 
     /// Returns true if the [`ALT`] key is pressed in the [`Modifiers`].
+    ///
+    /// [`ALT`]: Self::ALT
     pub fn alt(self) -> bool {
         self.contains(Self::ALT)
     }
 
     /// Returns true if the [`LOGO`] key is pressed in the [`Modifiers`].
+    ///
+    /// [`LOGO`]: Self::LOGO
     pub fn logo(self) -> bool {
         self.contains(Self::LOGO)
     }

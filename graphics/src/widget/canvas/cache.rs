@@ -1,7 +1,5 @@
-use crate::{
-    canvas::{Frame, Geometry},
-    Primitive,
-};
+use crate::widget::canvas::{Frame, Geometry};
+use crate::Primitive;
 
 use iced_native::Size;
 use std::{cell::RefCell, sync::Arc};
@@ -37,7 +35,7 @@ impl Cache {
     }
 
     /// Clears the [`Cache`], forcing a redraw the next time it is used.
-    pub fn clear(&mut self) {
+    pub fn clear(&self) {
         *self.state.borrow_mut() = State::Empty;
     }
 

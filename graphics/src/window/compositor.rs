@@ -1,6 +1,8 @@
+//! A compositor is responsible for initializing a renderer and managing window
+//! surfaces.
 use crate::{Color, Error, Viewport};
 
-use raw_window_handle::HasRawWindowHandle;
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use thiserror::Error;
 
 /// A graphics compositor that can draw to windows.
@@ -15,7 +17,7 @@ pub trait Compositor: Sized {
     type Surface;
 
     /// Creates a new [`Compositor`].
-    fn new<W: HasRawWindowHandle>(
+    fn new<W: HasRawWindowHandle + HasRawDisplayHandle>(
         settings: Self::Settings,
         compatible_window: Option<&W>,
     ) -> Result<(Self, Self::Renderer), Error>;
@@ -23,7 +25,7 @@ pub trait Compositor: Sized {
     /// Crates a new [`Surface`] for the given window.
     ///
     /// [`Surface`]: Self::Surface
-    fn create_surface<W: HasRawWindowHandle>(
+    fn create_surface<W: HasRawWindowHandle + HasRawDisplayHandle>(
         &mut self,
         window: &W,
     ) -> Self::Surface;
@@ -38,9 +40,13 @@ pub trait Compositor: Sized {
         height: u32,
     );
 
+    /// Returns [`Information`] used by this [`Compositor`].
+    fn fetch_information(&self) -> Information;
+
     /// Presents the [`Renderer`] primitives to the next frame of the given [`Surface`].
     ///
-    /// [`SwapChain`]: Self::SwapChain
+    /// [`Renderer`]: Self::Renderer
+    /// [`Surface`]: Self::Surface
     fn present<T: AsRef<str>>(
         &mut self,
         renderer: &mut Self::Renderer,
@@ -51,7 +57,7 @@ pub trait Compositor: Sized {
     ) -> Result<(), SurfaceError>;
 }
 
-/// Result of an unsuccessful call to [`Compositor::draw`].
+/// Result of an unsuccessful call to [`Compositor::present`].
 #[derive(Clone, PartialEq, Eq, Debug, Error)]
 pub enum SurfaceError {
     /// A timeout was encountered while trying to acquire the next frame.
@@ -70,4 +76,13 @@ pub enum SurfaceError {
     /// There is no more memory left to allocate a new frame.
     #[error("There is no more memory left to allocate a new frame")]
     OutOfMemory,
+}
+
+/// Contains informations about the graphics (e.g. graphics adapter, graphics backend).
+#[derive(Debug)]
+pub struct Information {
+    /// Contains the graphics adapter.
+    pub adapter: String,
+    /// Contains the graphics backend.
+    pub backend: String,
 }

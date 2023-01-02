@@ -1,42 +1,22 @@
-//! Provide progress feedback to your users.
-use iced_core::{Background, Color};
+//! Change the appearance of a progress bar.
+use iced_core::Background;
 
 /// The appearance of a progress bar.
 #[derive(Debug, Clone, Copy)]
-pub struct Style {
+pub struct Appearance {
+    /// The [`Background`] of the progress bar.
     pub background: Background,
+    /// The [`Background`] of the bar of the progress bar.
     pub bar: Background,
+    /// The border radius of the progress bar.
     pub border_radius: f32,
 }
 
 /// A set of rules that dictate the style of a progress bar.
 pub trait StyleSheet {
-    fn style(&self) -> Style;
-}
+    /// The supported style of the [`StyleSheet`].
+    type Style: Default;
 
-struct Default;
-
-impl StyleSheet for Default {
-    fn style(&self) -> Style {
-        Style {
-            background: Background::Color(Color::from_rgb(0.6, 0.6, 0.6)),
-            bar: Background::Color(Color::from_rgb(0.3, 0.9, 0.3)),
-            border_radius: 5.0,
-        }
-    }
-}
-
-impl<'a> std::default::Default for Box<dyn StyleSheet + 'a> {
-    fn default() -> Self {
-        Box::new(Default)
-    }
-}
-
-impl<'a, T> From<T> for Box<dyn StyleSheet + 'a>
-where
-    T: 'a + StyleSheet,
-{
-    fn from(style: T) -> Self {
-        Box::new(style)
-    }
+    /// Produces the [`Appearance`] of the progress bar.
+    fn appearance(&self, style: &Self::Style) -> Appearance;
 }

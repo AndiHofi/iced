@@ -11,6 +11,7 @@ pub trait WindowConfigurator<A>: Debug {
         self,
         available_monitors: &winit::event_loop::EventLoopWindowTarget<A>,
         window_builder: WindowBuilder,
+        _id: Option<String>,
     ) -> WindowBuilder;
 }
 
@@ -23,6 +24,7 @@ impl<A> WindowConfigurator<A> for NoopWindowConfigurator {
         self,
         _available_monitors: &winit::event_loop::EventLoopWindowTarget<A>,
         window_builder: WindowBuilder,
+        _id: Option<String>,
     ) -> WindowBuilder {
         window_builder
     }

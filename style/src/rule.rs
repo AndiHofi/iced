@@ -1,5 +1,27 @@
-//! Display a horizontal or vertical rule for dividing content.
+//! Change the appearance of a rule.
 use iced_core::Color;
+
+/// The appearance of a rule.
+#[derive(Debug, Clone, Copy)]
+pub struct Appearance {
+    /// The color of the rule.
+    pub color: Color,
+    /// The width (thickness) of the rule line.
+    pub width: u16,
+    /// The radius of the line corners.
+    pub radius: f32,
+    /// The [`FillMode`] of the rule.
+    pub fill_mode: FillMode,
+}
+
+/// A set of rules that dictate the style of a rule.
+pub trait StyleSheet {
+    /// The supported style of the [`StyleSheet`].
+    type Style: Default;
+
+    /// Produces the style of a rule.
+    fn appearance(&self, style: &Self::Style) -> Appearance;
+}
 
 /// The fill mode of a rule.
 #[derive(Debug, Clone, Copy)]
@@ -62,58 +84,5 @@ impl FillMode {
                 (first_pad, line_width)
             }
         }
-    }
-}
-
-/// The appearance of a rule.
-#[derive(Debug, Clone, Copy)]
-pub struct Style {
-    /// The color of the rule.
-    pub color: Color,
-    /// The width (thickness) of the rule line.
-    pub width: u16,
-    /// The radius of the line corners.
-    pub radius: f32,
-    /// The [`FillMode`] of the rule.
-    pub fill_mode: FillMode,
-}
-
-impl std::default::Default for Style {
-    fn default() -> Self {
-        Style {
-            color: [0.6, 0.6, 0.6, 0.6].into(),
-            width: 1,
-            radius: 0.0,
-            fill_mode: FillMode::Full,
-        }
-    }
-}
-
-/// A set of rules that dictate the style of a rule.
-pub trait StyleSheet {
-    /// Produces the style of a rule.
-    fn style(&self) -> Style;
-}
-
-struct Default;
-
-impl StyleSheet for Default {
-    fn style(&self) -> Style {
-        Style::default()
-    }
-}
-
-impl<'a> std::default::Default for Box<dyn StyleSheet + 'a> {
-    fn default() -> Self {
-        Box::new(Default)
-    }
-}
-
-impl<'a, T> From<T> for Box<dyn StyleSheet + 'a>
-where
-    T: 'a + StyleSheet,
-{
-    fn from(style: T) -> Self {
-        Box::new(style)
     }
 }

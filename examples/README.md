@@ -20,16 +20,12 @@ The __[`main`](tour/src/main.rs)__ file contains all the code of the example! Al
 [`iced_wgpu`]: ../wgpu
 [`iced_web`]: https://github.com/iced-rs/iced_web
 [`winit`]: https://github.com/rust-windowing/winit
-[`wgpu`]: https://github.com/gfx-rs/wgpu-rs
+[`wgpu`]: https://github.com/gfx-rs/wgpu
 
 You can run the native version with `cargo run`:
 ```
 cargo run --package tour
 ```
-
-The web version can be run by following [the usage instructions of `iced_web`] or by accessing [iced.rs](https://iced.rs/)!
-
-[the usage instructions of `iced_web`]: https://github.com/iced-rs/iced_web#usage
 
 ## [Todos](todos)
 A todos tracker inspired by [TodoMVC]. It showcases dynamic layout, text input, checkboxes, scrollables, icons, and async actions! It automatically saves your tasks in the background, even if you did not finish typing them.
@@ -46,7 +42,6 @@ You can run the native version with `cargo run`:
 ```
 cargo run --package todos
 ```
-We have not yet implemented a `LocalStorage` version of the auto-save feature. Therefore, it does not work on web _yet_!
 
 [TodoMVC]: http://todomvc.com/
 
@@ -105,6 +100,7 @@ A bunch of simpler examples exist:
 - [`pokedex`](pokedex), an application that displays a random Pokédex entry (sprite included!) by using the [PokéAPI].
 - [`progress_bar`](progress_bar), a simple progress bar that can be filled by using a slider.
 - [`scrollable`](scrollable), a showcase of the various scrollbar width options.
+- [`sierpinski_triangle`](sierpinski_triangle), a [sierpiński triangle](https://en.wikipedia.org/wiki/Sierpi%C5%84ski_triangle) Emulator, use `Canvas` and `Slider`.
 - [`solar_system`](solar_system), an animated solar system drawn using the `Canvas` widget and showcasing how to compose different transforms.
 - [`stopwatch`](stopwatch), a watch with start/stop and reset buttons showcasing how to listen to time.
 - [`svg`](svg), an application that renders the [Ghostscript Tiger] by leveraging the `Svg` widget.

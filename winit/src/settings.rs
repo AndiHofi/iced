@@ -7,7 +7,20 @@ mod platform;
 #[path = "settings/macos.rs"]
 mod platform;
 
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+#[cfg(target_arch = "wasm32")]
+#[path = "settings/wasm.rs"]
+mod platform;
+
+#[cfg(target_os = "linux")]
+#[path = "settings/linux.rs"]
+mod platform;
+
+#[cfg(not(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux",
+    target_arch = "wasm32"
+)))]
 #[path = "settings/other.rs"]
 mod platform;
 
@@ -16,9 +29,11 @@ pub use platform::PlatformSpecific;
 use crate::conversion;
 use crate::window_configurator::WindowConfigurator;
 use crate::winit::event_loop::EventLoopWindowTarget;
-use crate::{Mode, Position};
+use crate::{Position};
 use std::fmt::Debug;
 use winit::window::WindowBuilder;
+use winit::platform::unix::WindowBuilderExtUnix;
+use iced_native::window::Mode;
 
 /// The settings of an application.
 #[derive(Debug, Clone, Default)]
@@ -29,7 +44,7 @@ pub struct Settings<Flags> {
     /// communicate with it through the windowing system.
     pub id: Option<String>,
 
-    /// The [`Window`] settings
+    /// The [`Window`] settings.
     pub window: Window,
 
     /// The data needed to initialize an [`Application`].
@@ -39,12 +54,16 @@ pub struct Settings<Flags> {
 
     /// Whether the [`Application`] should exit when the user requests the
     /// window to close (e.g. the user presses the close button).
+    ///
+    /// [`Application`]: crate::Application
     pub exit_on_close_request: bool,
 
     /// Whether the [`Application`] should try to build the context
     /// using OpenGL ES first then OpenGL.
     ///
     /// NOTE: Only works for the `glow` backend.
+    ///
+    /// [`Application`]: crate::Application
     pub try_opengles_first: bool,
 }
 
@@ -62,6 +81,9 @@ pub struct Window {
 
     /// The maximum size of the window.
     pub max_size: Option<(u32, u32)>,
+
+    /// Whether the window should be visible or not.
+    pub visible: bool,
 
     /// Whether the window should be resizable or not.
     pub resizable: bool,
@@ -100,6 +122,7 @@ impl<A> WindowConfigurator<A> for SettingsWindowConfigurator {
         self,
         available_monitors: &EventLoopWindowTarget<A>,
         mut window_builder: WindowBuilder,
+        _id: Option<String>,
     ) -> WindowBuilder {
         let (width, height) = self.window.size;
 
@@ -139,10 +162,8 @@ impl<A> WindowConfigurator<A> for SettingsWindowConfigurator {
             target_os = "openbsd"
         ))]
         {
-            use ::winit::platform::unix::WindowBuilderExtUnix;
-
-            if let Some(id) = self.id {
-                window_builder = window_builder.with_app_id(id);
+            if let Some(id) = self.window.platform_specific.id {
+                window_builder = window_builder.with_name(id.general, id.instance);
             }
         }
 
@@ -188,6 +209,7 @@ impl Default for Window {
             position: Position::default(),
             min_size: None,
             max_size: None,
+            visible: true,
             resizable: true,
             decorations: true,
             transparent: false,

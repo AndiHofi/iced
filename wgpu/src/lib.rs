@@ -16,45 +16,52 @@
 //! - Meshes of triangles, useful to draw geometry freely.
 //!
 //! [Iced]: https://github.com/iced-rs/iced
-//! [`iced_native`]: https://github.com/iced-rs/iced/tree/master/native
+//! [`iced_native`]: https://github.com/iced-rs/iced/tree/0.6/native
 //! [`wgpu`]: https://github.com/gfx-rs/wgpu-rs
 //! [WebGPU API]: https://gpuweb.github.io/gpuweb/
 //! [`wgpu_glyph`]: https://github.com/hecrj/wgpu_glyph
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/iced-rs/iced/9ab6923e943f784985e9ef9ca28b10278297225d/docs/logo.svg"
 )]
-#![deny(missing_docs)]
-#![deny(missing_debug_implementations)]
-#![deny(unused_results)]
-#![deny(unsafe_code)]
+#![deny(
+    missing_debug_implementations,
+    missing_docs,
+    unsafe_code,
+    unused_results,
+    clippy::extra_unused_lifetimes,
+    clippy::from_over_into,
+    clippy::needless_borrow,
+    clippy::new_without_default,
+    clippy::useless_conversion
+)]
 #![forbid(rust_2018_idioms)]
+#![allow(clippy::inherent_to_string, clippy::type_complexity)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod settings;
-pub mod triangle;
-pub mod widget;
 pub mod window;
 
 mod backend;
+mod buffer;
 mod quad;
 mod text;
+mod triangle;
 
 pub use iced_graphics::{Antialiasing, Color, Error, Primitive, Viewport};
+pub use iced_native::Theme;
 pub use wgpu;
 
 pub use backend::Backend;
 pub use settings::Settings;
 
-#[doc(no_inline)]
-pub use widget::*;
-
 pub(crate) use iced_graphics::Transformation;
 
-#[cfg(any(feature = "image_rs", feature = "svg"))]
+#[cfg(any(feature = "image", feature = "svg"))]
 mod image;
 
 /// A [`wgpu`] graphics renderer for [`iced`].
 ///
 /// [`wgpu`]: https://github.com/gfx-rs/wgpu-rs
 /// [`iced`]: https://github.com/iced-rs/iced
-pub type Renderer = iced_graphics::Renderer<Backend>;
+pub type Renderer<Theme = iced_native::Theme> =
+    iced_graphics::Renderer<Backend, Theme>;

@@ -1,12 +1,12 @@
 //! Convert [`winit`] types into [`iced_native`] types, and viceversa.
 //!
 //! [`winit`]: https://github.com/rust-windowing/winit
-//! [`iced_native`]: https://github.com/hecrj/iced/tree/master/native
+//! [`iced_native`]: https://github.com/iced-rs/iced/tree/0.6/native
 use crate::keyboard;
 use crate::mouse;
 use crate::touch;
 use crate::window;
-use crate::{Event, Mode, Point, Position};
+use crate::{Event, Point, Position};
 
 /// Converts a winit window event into an iced event.
 pub fn window_event(
@@ -182,33 +182,43 @@ pub fn position(
     }
 }
 
-/// Converts a [`Mode`] to a [`winit`] fullscreen mode.
+/// Converts a [`window::Mode`] to a [`winit`] fullscreen mode.
 ///
 /// [`winit`]: https://github.com/rust-windowing/winit
 pub fn fullscreen(
     monitor: Option<winit::monitor::MonitorHandle>,
-    mode: Mode,
+    mode: window::Mode,
 ) -> Option<winit::window::Fullscreen> {
     match mode {
-        Mode::Windowed | Mode::Hidden => None,
-        Mode::Fullscreen => {
+        window::Mode::Windowed | window::Mode::Hidden => None,
+        window::Mode::Fullscreen => {
             Some(winit::window::Fullscreen::Borderless(monitor))
         }
     }
 }
 
-/// Converts a [`Mode`] to a visibility flag.
-pub fn visible(mode: Mode) -> bool {
+/// Converts a [`window::Mode`] to a visibility flag.
+pub fn visible(mode: window::Mode) -> bool {
     match mode {
-        Mode::Windowed | Mode::Fullscreen => true,
-        Mode::Hidden => false,
+        window::Mode::Windowed | window::Mode::Fullscreen => true,
+        window::Mode::Hidden => false,
+    }
+}
+
+/// Converts a [`winit`] fullscreen mode to a [`window::Mode`].
+///
+/// [`winit`]: https://github.com/rust-windowing/winit
+pub fn mode(mode: Option<winit::window::Fullscreen>) -> window::Mode {
+    match mode {
+        None => window::Mode::Windowed,
+        Some(_) => window::Mode::Fullscreen,
     }
 }
 
 /// Converts a `MouseCursor` from [`iced_native`] to a [`winit`] cursor icon.
 ///
 /// [`winit`]: https://github.com/rust-windowing/winit
-/// [`iced_native`]: https://github.com/hecrj/iced/tree/master/native
+/// [`iced_native`]: https://github.com/iced-rs/iced/tree/0.6/native
 pub fn mouse_interaction(
     interaction: mouse::Interaction,
 ) -> winit::window::CursorIcon {
@@ -232,7 +242,7 @@ pub fn mouse_interaction(
 /// Converts a `MouseButton` from [`winit`] to an [`iced_native`] mouse button.
 ///
 /// [`winit`]: https://github.com/rust-windowing/winit
-/// [`iced_native`]: https://github.com/hecrj/iced/tree/master/native
+/// [`iced_native`]: https://github.com/iced-rs/iced/tree/0.6/native
 pub fn mouse_button(mouse_button: winit::event::MouseButton) -> mouse::Button {
     match mouse_button {
         winit::event::MouseButton::Left => mouse::Button::Left,
@@ -248,7 +258,7 @@ pub fn mouse_button(mouse_button: winit::event::MouseButton) -> mouse::Button {
 /// modifiers state.
 ///
 /// [`winit`]: https://github.com/rust-windowing/winit
-/// [`iced_native`]: https://github.com/hecrj/iced/tree/master/native
+/// [`iced_native`]: https://github.com/iced-rs/iced/tree/0.6/native
 pub fn modifiers(
     modifiers: winit::event::ModifiersState,
 ) -> keyboard::Modifiers {
@@ -275,7 +285,7 @@ pub fn cursor_position(
 /// Converts a `Touch` from [`winit`] to an [`iced_native`] touch event.
 ///
 /// [`winit`]: https://github.com/rust-windowing/winit
-/// [`iced_native`]: https://github.com/hecrj/iced/tree/master/native
+/// [`iced_native`]: https://github.com/iced-rs/iced/tree/0.6/native
 pub fn touch_event(
     touch: winit::event::Touch,
     scale_factor: f64,
@@ -306,7 +316,7 @@ pub fn touch_event(
 /// Converts a `VirtualKeyCode` from [`winit`] to an [`iced_native`] key code.
 ///
 /// [`winit`]: https://github.com/rust-windowing/winit
-/// [`iced_native`]: https://github.com/hecrj/iced/tree/master/native
+/// [`iced_native`]: https://github.com/iced-rs/iced/tree/0.6/native
 pub fn key_code(
     virtual_keycode: winit::event::VirtualKeyCode,
 ) -> keyboard::KeyCode {
@@ -485,10 +495,10 @@ pub fn key_code(
 
 // As defined in: http://www.unicode.org/faq/private_use.html
 pub(crate) fn is_private_use_character(c: char) -> bool {
-    match c {
+    matches!(
+        c,
         '\u{E000}'..='\u{F8FF}'
         | '\u{F0000}'..='\u{FFFFD}'
-        | '\u{100000}'..='\u{10FFFD}' => true,
-        _ => false,
-    }
+        | '\u{100000}'..='\u{10FFFD}'
+    )
 }

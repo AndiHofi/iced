@@ -1,24 +1,4 @@
 //! Write your own renderer.
-//!
-//! You will need to implement the `Renderer` trait first. It simply contains
-//! an `Output` associated type.
-//!
-//! There is no common trait to draw all the widgets. Instead, every [`Widget`]
-//! constrains its generic `Renderer` type as necessary.
-//!
-//! This approach is flexible and composable. For instance, the
-//! [`Text`] widget only needs a [`text::Renderer`] while a [`Checkbox`] widget
-//! needs both a [`text::Renderer`] and a [`checkbox::Renderer`], reusing logic.
-//!
-//! In the end, a __renderer__ satisfying all the constraints is
-//! needed to build a [`UserInterface`].
-//!
-//! [`Widget`]: crate::Widget
-//! [`UserInterface`]: crate::UserInterface
-//! [`Text`]: crate::widget::Text
-//! [`text::Renderer`]: crate::widget::text::Renderer
-//! [`Checkbox`]: crate::widget::Checkbox
-//! [`checkbox::Renderer`]: crate::widget::checkbox::Renderer
 #[cfg(debug_assertions)]
 mod null;
 #[cfg(debug_assertions)]
@@ -27,9 +7,11 @@ pub use null::Null;
 use crate::layout;
 use crate::{Background, Color, Element, Rectangle, Vector};
 
-/// A component that can take the state of a user interface and produce an
-/// output for its users.
+/// A component that can be used by widgets to draw themselves on a screen.
 pub trait Renderer: Sized {
+    /// The supported theme of the [`Renderer`].
+    type Theme;
+
     /// Lays out the elements of a user interface.
     ///
     /// You should override this if you need to perform any operations before or
@@ -39,7 +21,7 @@ pub trait Renderer: Sized {
         element: &Element<'a, Message, Self>,
         limits: &layout::Limits,
     ) -> layout::Node {
-        element.layout(self, limits)
+        element.as_widget().layout(self, limits)
     }
 
     /// Draws the primitives recorded in the given closure in a new layer.
@@ -68,13 +50,36 @@ pub struct Quad {
     pub bounds: Rectangle,
 
     /// The border radius of the [`Quad`].
-    pub border_radius: f32,
+    pub border_radius: BorderRadius,
 
     /// The border width of the [`Quad`].
     pub border_width: f32,
 
     /// The border color of the [`Quad`].
     pub border_color: Color,
+}
+
+/// The border radi for the corners of a graphics primitive in the order:
+/// top-left, top-right, bottom-right, bottom-left.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct BorderRadius([f32; 4]);
+
+impl From<f32> for BorderRadius {
+    fn from(w: f32) -> Self {
+        Self([w; 4])
+    }
+}
+
+impl From<[f32; 4]> for BorderRadius {
+    fn from(radi: [f32; 4]) -> Self {
+        Self(radi)
+    }
+}
+
+impl From<BorderRadius> for [f32; 4] {
+    fn from(radi: BorderRadius) -> Self {
+        radi.0
+    }
 }
 
 /// The styling attributes of a [`Renderer`].

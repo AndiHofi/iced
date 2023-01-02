@@ -1,19 +1,18 @@
 //! Provide progress feedback to your users.
 use crate::layout;
 use crate::renderer;
-use crate::{
-    Color, Element, Hasher, Layout, Length, Point, Rectangle, Size, Widget,
-};
+use crate::widget::Tree;
+use crate::{Color, Element, Layout, Length, Point, Rectangle, Size, Widget};
 
-use std::{hash::Hash, ops::RangeInclusive};
+use std::ops::RangeInclusive;
 
-pub use iced_style::progress_bar::{Style, StyleSheet};
+pub use iced_style::progress_bar::{Appearance, StyleSheet};
 
 /// A bar that displays progress.
 ///
 /// # Example
 /// ```
-/// # use iced_native::widget::ProgressBar;
+/// # type ProgressBar = iced_native::widget::ProgressBar<iced_native::renderer::Null>;
 /// let value = 50.0;
 ///
 /// ProgressBar::new(0.0..=100.0, value);
@@ -21,15 +20,23 @@ pub use iced_style::progress_bar::{Style, StyleSheet};
 ///
 /// ![Progress bar drawn with `iced_wgpu`](https://user-images.githubusercontent.com/18618951/71662391-a316c200-2d51-11ea-9cef-52758cab85e3.png)
 #[allow(missing_debug_implementations)]
-pub struct ProgressBar<'a> {
+pub struct ProgressBar<Renderer>
+where
+    Renderer: crate::Renderer,
+    Renderer::Theme: StyleSheet,
+{
     range: RangeInclusive<f32>,
     value: f32,
     width: Length,
     height: Option<Length>,
-    style_sheet: Box<dyn StyleSheet + 'a>,
+    style: <Renderer::Theme as StyleSheet>::Style,
 }
 
-impl<'a> ProgressBar<'a> {
+impl<Renderer> ProgressBar<Renderer>
+where
+    Renderer: crate::Renderer,
+    Renderer::Theme: StyleSheet,
+{
     /// The default height of a [`ProgressBar`].
     pub const DEFAULT_HEIGHT: u16 = 30;
 
@@ -40,11 +47,11 @@ impl<'a> ProgressBar<'a> {
     ///   * the current value of the [`ProgressBar`]
     pub fn new(range: RangeInclusive<f32>, value: f32) -> Self {
         ProgressBar {
-            value: value.max(*range.start()).min(*range.end()),
+            value: value.clamp(*range.start(), *range.end()),
             range,
             width: Length::Fill,
             height: None,
-            style_sheet: Default::default(),
+            style: Default::default(),
         }
     }
 
@@ -63,16 +70,17 @@ impl<'a> ProgressBar<'a> {
     /// Sets the style of the [`ProgressBar`].
     pub fn style(
         mut self,
-        style_sheet: impl Into<Box<dyn StyleSheet + 'a>>,
+        style: impl Into<<Renderer::Theme as StyleSheet>::Style>,
     ) -> Self {
-        self.style_sheet = style_sheet.into();
+        self.style = style.into();
         self
     }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for ProgressBar<'a>
+impl<Message, Renderer> Widget<Message, Renderer> for ProgressBar<Renderer>
 where
     Renderer: crate::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     fn width(&self) -> Length {
         self.width
@@ -98,7 +106,9 @@ where
 
     fn draw(
         &self,
+        _state: &Tree,
         renderer: &mut Renderer,
+        theme: &Renderer::Theme,
         _style: &renderer::Style,
         layout: Layout<'_>,
         _cursor_position: Point,
@@ -114,12 +124,12 @@ where
                 / (range_end - range_start)
         };
 
-        let style = self.style_sheet.style();
+        let style = theme.appearance(&self.style);
 
         renderer.fill_quad(
             renderer::Quad {
                 bounds: Rectangle { ..bounds },
-                border_radius: style.border_radius,
+                border_radius: style.border_radius.into(),
                 border_width: 0.0,
                 border_color: Color::TRANSPARENT,
             },
@@ -133,7 +143,7 @@ where
                         width: active_progress_width,
                         ..bounds
                     },
-                    border_radius: style.border_radius,
+                    border_radius: style.border_radius.into(),
                     border_width: 0.0,
                     border_color: Color::TRANSPARENT,
                 },
@@ -141,23 +151,18 @@ where
             );
         }
     }
-
-    fn hash_layout(&self, state: &mut Hasher) {
-        struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
-
-        self.width.hash(state);
-        self.height.hash(state);
-    }
 }
 
-impl<'a, Message, Renderer> From<ProgressBar<'a>>
+impl<'a, Message, Renderer> From<ProgressBar<Renderer>>
     for Element<'a, Message, Renderer>
 where
-    Renderer: 'a + crate::Renderer,
     Message: 'a,
+    Renderer: 'a + crate::Renderer,
+    Renderer::Theme: StyleSheet,
 {
-    fn from(progress_bar: ProgressBar<'a>) -> Element<'a, Message, Renderer> {
+    fn from(
+        progress_bar: ProgressBar<Renderer>,
+    ) -> Element<'a, Message, Renderer> {
         Element::new(progress_bar)
     }
 }

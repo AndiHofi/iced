@@ -1,95 +1,56 @@
-//! Display an interactive selector of a single value from a range of values.
+//! Change the apperance of a slider.
 use iced_core::Color;
 
 /// The appearance of a slider.
 #[derive(Debug, Clone, Copy)]
-pub struct Style {
+pub struct Appearance {
+    /// The colors of the rail of the slider.
     pub rail_colors: (Color, Color),
+    /// The appearance of the [`Handle`] of the slider.
     pub handle: Handle,
 }
 
 /// The appearance of the handle of a slider.
 #[derive(Debug, Clone, Copy)]
 pub struct Handle {
+    /// The shape of the handle.
     pub shape: HandleShape,
+    /// The [`Color`] of the handle.
     pub color: Color,
+    /// The border width of the handle.
     pub border_width: f32,
+    /// The border [`Color`] of the handle.
     pub border_color: Color,
 }
 
 /// The shape of the handle of a slider.
 #[derive(Debug, Clone, Copy)]
 pub enum HandleShape {
-    Circle { radius: f32 },
-    Rectangle { width: u16, border_radius: f32 },
+    /// A circular handle.
+    Circle {
+        /// The radius of the circle.
+        radius: f32,
+    },
+    /// A rectangular shape.
+    Rectangle {
+        /// The width of the rectangle.
+        width: u16,
+        /// The border radius of the corners of the rectangle.
+        border_radius: f32,
+    },
 }
 
 /// A set of rules that dictate the style of a slider.
 pub trait StyleSheet {
+    /// The supported style of the [`StyleSheet`].
+    type Style: Default;
+
     /// Produces the style of an active slider.
-    fn active(&self) -> Style;
+    fn active(&self, style: &Self::Style) -> Appearance;
 
     /// Produces the style of an hovered slider.
-    fn hovered(&self) -> Style;
+    fn hovered(&self, style: &Self::Style) -> Appearance;
 
     /// Produces the style of a slider that is being dragged.
-    fn dragging(&self) -> Style;
-}
-
-struct Default;
-
-impl StyleSheet for Default {
-    fn active(&self) -> Style {
-        Style {
-            rail_colors: ([0.6, 0.6, 0.6, 0.5].into(), Color::WHITE),
-            handle: Handle {
-                shape: HandleShape::Rectangle {
-                    width: 8,
-                    border_radius: 4.0,
-                },
-                color: Color::from_rgb(0.95, 0.95, 0.95),
-                border_color: Color::from_rgb(0.6, 0.6, 0.6),
-                border_width: 1.0,
-            },
-        }
-    }
-
-    fn hovered(&self) -> Style {
-        let active = self.active();
-
-        Style {
-            handle: Handle {
-                color: Color::from_rgb(0.90, 0.90, 0.90),
-                ..active.handle
-            },
-            ..active
-        }
-    }
-
-    fn dragging(&self) -> Style {
-        let active = self.active();
-
-        Style {
-            handle: Handle {
-                color: Color::from_rgb(0.85, 0.85, 0.85),
-                ..active.handle
-            },
-            ..active
-        }
-    }
-}
-
-impl<'a> std::default::Default for Box<dyn StyleSheet + 'a> {
-    fn default() -> Self {
-        Box::new(Default)
-    }
-}
-
-impl<'a, T> From<T> for Box<dyn StyleSheet + 'a>
-where
-    T: StyleSheet + 'a,
-{
-    fn from(style_sheet: T) -> Self {
-        Box::new(style_sheet)
-    }
+    fn dragging(&self, style: &Self::Style) -> Appearance;
 }

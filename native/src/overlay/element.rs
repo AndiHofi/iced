@@ -4,7 +4,8 @@ use crate::event::{self, Event};
 use crate::layout;
 use crate::mouse;
 use crate::renderer;
-use crate::{Clipboard, Hasher, Layout, Point, Rectangle, Shell, Size, Vector};
+use crate::widget;
+use crate::{Clipboard, Layout, Point, Rectangle, Shell, Size, Vector};
 
 /// A generic [`Overlay`].
 #[allow(missing_debug_implementations)]
@@ -41,7 +42,7 @@ where
     where
         Message: 'a,
         Renderer: 'a,
-        B: 'static,
+        B: 'a,
     {
         Element {
             position: self.position,
@@ -94,16 +95,23 @@ where
     pub fn draw(
         &self,
         renderer: &mut Renderer,
+        theme: &Renderer::Theme,
         style: &renderer::Style,
         layout: Layout<'_>,
         cursor_position: Point,
     ) {
-        self.overlay.draw(renderer, style, layout, cursor_position)
+        self.overlay
+            .draw(renderer, theme, style, layout, cursor_position)
     }
 
-    /// Computes the _layout_ hash of the [`Element`].
-    pub fn hash_layout(&self, state: &mut Hasher) {
-        self.overlay.hash_layout(state, self.position);
+    /// Applies a [`widget::Operation`] to the [`Element`].
+    pub fn operate(
+        &mut self,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn widget::Operation<Message>,
+    ) {
+        self.overlay.operate(layout, renderer, operation);
     }
 }
 
@@ -132,6 +140,58 @@ where
         position: Point,
     ) -> layout::Node {
         self.content.layout(renderer, bounds, position)
+    }
+
+    fn operate(
+        &mut self,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn widget::Operation<B>,
+    ) {
+        struct MapOperation<'a, B> {
+            operation: &'a mut dyn widget::Operation<B>,
+        }
+
+        impl<'a, T, B> widget::Operation<T> for MapOperation<'a, B> {
+            fn container(
+                &mut self,
+                id: Option<&widget::Id>,
+                operate_on_children: &mut dyn FnMut(
+                    &mut dyn widget::Operation<T>,
+                ),
+            ) {
+                self.operation.container(id, &mut |operation| {
+                    operate_on_children(&mut MapOperation { operation });
+                });
+            }
+
+            fn focusable(
+                &mut self,
+                state: &mut dyn widget::operation::Focusable,
+                id: Option<&widget::Id>,
+            ) {
+                self.operation.focusable(state, id);
+            }
+
+            fn scrollable(
+                &mut self,
+                state: &mut dyn widget::operation::Scrollable,
+                id: Option<&widget::Id>,
+            ) {
+                self.operation.scrollable(state, id);
+            }
+
+            fn text_input(
+                &mut self,
+                state: &mut dyn widget::operation::TextInput,
+                id: Option<&widget::Id>,
+            ) {
+                self.operation.text_input(state, id)
+            }
+        }
+
+        self.content
+            .operate(layout, renderer, &mut MapOperation { operation });
     }
 
     fn on_event(
@@ -178,14 +238,12 @@ where
     fn draw(
         &self,
         renderer: &mut Renderer,
+        theme: &Renderer::Theme,
         style: &renderer::Style,
         layout: Layout<'_>,
         cursor_position: Point,
     ) {
-        self.content.draw(renderer, style, layout, cursor_position)
-    }
-
-    fn hash_layout(&self, state: &mut Hasher, position: Point) {
-        self.content.hash_layout(state, position);
+        self.content
+            .draw(renderer, theme, style, layout, cursor_position)
     }
 }

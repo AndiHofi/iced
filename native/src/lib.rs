@@ -23,19 +23,27 @@
 //! - Build a new renderer, see the [renderer] module.
 //! - Build a custom widget, start at the [`Widget`] trait.
 //!
-//! [`iced_core`]: https://github.com/iced-rs/iced/tree/master/core
-//! [`iced_winit`]: https://github.com/iced-rs/iced/tree/master/winit
+//! [`iced_core`]: https://github.com/iced-rs/iced/tree/0.6/core
+//! [`iced_winit`]: https://github.com/iced-rs/iced/tree/0.6/winit
 //! [`druid`]: https://github.com/xi-editor/druid
 //! [`raw-window-handle`]: https://github.com/rust-windowing/raw-window-handle
 //! [renderer]: crate::renderer
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/iced-rs/iced/9ab6923e943f784985e9ef9ca28b10278297225d/docs/logo.svg"
 )]
-#![deny(missing_docs)]
-#![deny(missing_debug_implementations)]
-#![deny(unused_results)]
-#![forbid(unsafe_code)]
-#![forbid(rust_2018_idioms)]
+#![deny(
+    missing_debug_implementations,
+    missing_docs,
+    unused_results,
+    clippy::extra_unused_lifetimes,
+    clippy::from_over_into,
+    clippy::needless_borrow,
+    clippy::new_without_default,
+    clippy::useless_conversion
+)]
+#![forbid(unsafe_code, rust_2018_idioms)]
+#![allow(clippy::inherent_to_string, clippy::type_complexity)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 pub mod clipboard;
 pub mod command;
 pub mod event;
@@ -48,6 +56,7 @@ pub mod program;
 pub mod renderer;
 pub mod subscription;
 pub mod svg;
+pub mod system;
 pub mod text;
 pub mod touch;
 pub mod user_interface;
@@ -71,10 +80,12 @@ mod debug;
 pub use iced_core::alignment;
 pub use iced_core::time;
 pub use iced_core::{
-    Alignment, Background, Color, Font, Length, Padding, Point, Rectangle,
-    Size, Vector,
+    color, Alignment, Background, Color, ContentFit, Font, Length, Padding,
+    Point, Rectangle, Size, Vector,
 };
 pub use iced_futures::{executor, futures};
+pub use iced_style::application;
+pub use iced_style::theme;
 
 #[doc(no_inline)]
 pub use executor::Executor;
@@ -92,5 +103,6 @@ pub use renderer::Renderer;
 pub use runtime::Runtime;
 pub use shell::Shell;
 pub use subscription::Subscription;
+pub use theme::Theme;
 pub use user_interface::UserInterface;
 pub use widget::Widget;

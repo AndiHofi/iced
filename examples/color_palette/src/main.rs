@@ -1,9 +1,10 @@
-use iced::canvas::{self, Cursor, Frame, Geometry, Path};
+use iced::widget::canvas::{self, Canvas, Cursor, Frame, Geometry, Path};
+use iced::widget::{column, row, text, Slider};
 use iced::{
-    alignment, slider, Alignment, Canvas, Color, Column, Element, Length,
-    Point, Rectangle, Row, Sandbox, Settings, Size, Slider, Text, Vector,
+    alignment, Alignment, Color, Element, Length, Point, Rectangle, Sandbox,
+    Settings, Size, Vector,
 };
-use palette::{self, Hsl, Limited, Srgb};
+use palette::{self, convert::FromColor, Hsl, Srgb};
 use std::marker::PhantomData;
 use std::ops::RangeInclusive;
 
@@ -49,42 +50,43 @@ impl Sandbox for ColorPalette {
     fn update(&mut self, message: Message) {
         let srgb = match message {
             Message::RgbColorChanged(rgb) => palette::Srgb::from(rgb),
-            Message::HslColorChanged(hsl) => palette::Srgb::from(hsl),
-            Message::HsvColorChanged(hsv) => palette::Srgb::from(hsv),
-            Message::HwbColorChanged(hwb) => palette::Srgb::from(hwb),
-            Message::LabColorChanged(lab) => palette::Srgb::from(lab),
-            Message::LchColorChanged(lch) => palette::Srgb::from(lch),
+            Message::HslColorChanged(hsl) => palette::Srgb::from_color(hsl),
+            Message::HsvColorChanged(hsv) => palette::Srgb::from_color(hsv),
+            Message::HwbColorChanged(hwb) => palette::Srgb::from_color(hwb),
+            Message::LabColorChanged(lab) => palette::Srgb::from_color(lab),
+            Message::LchColorChanged(lch) => palette::Srgb::from_color(lch),
         };
 
-        self.theme = Theme::new(srgb.clamp());
+        self.theme = Theme::new(srgb);
     }
 
-    fn view(&mut self) -> Element<Message> {
+    fn view(&self) -> Element<Message> {
         let base = self.theme.base;
 
         let srgb = palette::Srgb::from(base);
-        let hsl = palette::Hsl::from(srgb);
-        let hsv = palette::Hsv::from(srgb);
-        let hwb = palette::Hwb::from(srgb);
-        let lab = palette::Lab::from(srgb);
-        let lch = palette::Lch::from(srgb);
+        let hsl = palette::Hsl::from_color(srgb);
+        let hsv = palette::Hsv::from_color(srgb);
+        let hwb = palette::Hwb::from_color(srgb);
+        let lab = palette::Lab::from_color(srgb);
+        let lch = palette::Lch::from_color(srgb);
 
-        Column::new()
-            .padding(10)
-            .spacing(10)
-            .push(self.rgb.view(base).map(Message::RgbColorChanged))
-            .push(self.hsl.view(hsl).map(Message::HslColorChanged))
-            .push(self.hsv.view(hsv).map(Message::HsvColorChanged))
-            .push(self.hwb.view(hwb).map(Message::HwbColorChanged))
-            .push(self.lab.view(lab).map(Message::LabColorChanged))
-            .push(self.lch.view(lch).map(Message::LchColorChanged))
-            .push(self.theme.view())
-            .into()
+        column![
+            self.rgb.view(base).map(Message::RgbColorChanged),
+            self.hsl.view(hsl).map(Message::HslColorChanged),
+            self.hsv.view(hsv).map(Message::HsvColorChanged),
+            self.hwb.view(hwb).map(Message::HwbColorChanged),
+            self.lab.view(lab).map(Message::LabColorChanged),
+            self.lch.view(lch).map(Message::LchColorChanged),
+            self.theme.view(),
+        ]
+        .padding(10)
+        .spacing(10)
+        .into()
     }
 }
 
 #[derive(Debug)]
-pub struct Theme {
+struct Theme {
     lower: Vec<Color>,
     base: Color,
     higher: Vec<Color>,
@@ -98,7 +100,7 @@ impl Theme {
         let base = base.into();
 
         // Convert to HSL color for manipulation
-        let hsl = Hsl::from(Srgb::from(base));
+        let hsl = Hsl::from_color(Srgb::from(base));
 
         let lower = [
             hsl.shift_hue(-135.0).lighten(0.075),
@@ -117,12 +119,12 @@ impl Theme {
         Theme {
             lower: lower
                 .iter()
-                .map(|&color| Srgb::from(color).clamp().into())
+                .map(|&color| Srgb::from_color(color).into())
                 .collect(),
             base,
             higher: higher
                 .iter()
-                .map(|&color| Srgb::from(color).clamp().into())
+                .map(|&color| Srgb::from_color(color).into())
                 .collect(),
             canvas_cache: canvas::Cache::default(),
         }
@@ -139,7 +141,7 @@ impl Theme {
             .chain(self.higher.iter())
     }
 
-    pub fn view(&mut self) -> Element<Message> {
+    pub fn view(&self) -> Element<Message> {
         Canvas::new(self)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -207,14 +209,14 @@ impl Theme {
 
         text.vertical_alignment = alignment::Vertical::Bottom;
 
-        let hsl = Hsl::from(Srgb::from(self.base));
+        let hsl = Hsl::from_color(Srgb::from(self.base));
         for i in 0..self.len() {
             let pct = (i as f32 + 1.0) / (self.len() as f32 + 1.0);
             let graded = Hsl {
                 lightness: 1.0 - pct,
                 ..hsl
             };
-            let color: Color = Srgb::from(graded.clamp()).into();
+            let color: Color = Srgb::from_color(graded).into();
 
             let anchor = Point {
                 x: (i as f32) * box_size.width,
@@ -235,8 +237,16 @@ impl Theme {
     }
 }
 
-impl canvas::Program<Message> for Theme {
-    fn draw(&self, bounds: Rectangle, _cursor: Cursor) -> Vec<Geometry> {
+impl<Message> canvas::Program<Message> for Theme {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        _theme: &iced::Theme,
+        bounds: Rectangle,
+        _cursor: Cursor,
+    ) -> Vec<Geometry> {
         let theme = self.canvas_cache.draw(bounds.size(), |frame| {
             self.draw(frame);
         });
@@ -262,7 +272,6 @@ fn color_hex_string(color: &Color) -> String {
 
 #[derive(Default)]
 struct ColorPicker<C: ColorSpace> {
-    sliders: [slider::State; 3],
     color_space: PhantomData<C>,
 }
 
@@ -277,37 +286,30 @@ trait ColorSpace: Sized {
     fn to_string(&self) -> String;
 }
 
-impl<C: 'static + ColorSpace + Copy> ColorPicker<C> {
-    fn view(&mut self, color: C) -> Element<C> {
+impl<C: ColorSpace + Copy> ColorPicker<C> {
+    fn view(&self, color: C) -> Element<C> {
         let [c1, c2, c3] = color.components();
-        let [s1, s2, s3] = &mut self.sliders;
         let [cr1, cr2, cr3] = C::COMPONENT_RANGES;
 
-        fn slider<C: Clone>(
-            state: &mut slider::State,
+        fn slider<'a, C: Clone>(
             range: RangeInclusive<f64>,
             component: f32,
-            update: impl Fn(f32) -> C + 'static,
-        ) -> Slider<f64, C> {
-            Slider::new(state, range, f64::from(component), move |v| {
-                update(v as f32)
-            })
-            .step(0.01)
+            update: impl Fn(f32) -> C + 'a,
+        ) -> Slider<'a, f64, C, iced::Renderer> {
+            Slider::new(range, f64::from(component), move |v| update(v as f32))
+                .step(0.01)
         }
 
-        Row::new()
-            .spacing(10)
-            .align_items(Alignment::Center)
-            .push(Text::new(C::LABEL).width(Length::Units(50)))
-            .push(slider(s1, cr1, c1, move |v| C::new(v, c2, c3)))
-            .push(slider(s2, cr2, c2, move |v| C::new(c1, v, c3)))
-            .push(slider(s3, cr3, c3, move |v| C::new(c1, c2, v)))
-            .push(
-                Text::new(color.to_string())
-                    .width(Length::Units(185))
-                    .size(14),
-            )
-            .into()
+        row![
+            text(C::LABEL).width(Length::Units(50)),
+            slider(cr1, c1, move |v| C::new(v, c2, c3)),
+            slider(cr2, c2, move |v| C::new(c1, v, c3)),
+            slider(cr3, c3, move |v| C::new(c1, c2, v)),
+            text(color.to_string()).width(Length::Units(185)).size(14),
+        ]
+        .spacing(10)
+        .align_items(Alignment::Center)
+        .into()
     }
 }
 

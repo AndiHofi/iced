@@ -1,22 +1,23 @@
 mod atlas;
 
-#[cfg(feature = "image_rs")]
-mod raster;
+#[cfg(feature = "image")]
+use iced_graphics::image::raster;
 
 #[cfg(feature = "svg")]
-mod vector;
+use iced_graphics::image::vector;
 
 use crate::Transformation;
 use atlas::Atlas;
 
 use iced_graphics::layer;
-use iced_native::Rectangle;
+use iced_native::{Rectangle, Size};
+
 use std::cell::RefCell;
 use std::mem;
 
 use bytemuck::{Pod, Zeroable};
 
-#[cfg(feature = "image_rs")]
+#[cfg(feature = "image")]
 use iced_native::image;
 
 #[cfg(feature = "svg")]
@@ -24,10 +25,10 @@ use iced_native::svg;
 
 #[derive(Debug)]
 pub struct Pipeline {
-    #[cfg(feature = "image_rs")]
-    raster_cache: RefCell<raster::Cache>,
+    #[cfg(feature = "image")]
+    raster_cache: RefCell<raster::Cache<Atlas>>,
     #[cfg(feature = "svg")]
-    vector_cache: RefCell<vector::Cache>,
+    vector_cache: RefCell<vector::Cache<Atlas>>,
 
     pipeline: wgpu::RenderPipeline,
     uniforms: wgpu::Buffer,
@@ -136,7 +137,7 @@ impl Pipeline {
             });
 
         let shader =
-            device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("iced_wgpu::image::shader"),
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
                     include_str!("shader/image.wgsl"),
@@ -176,7 +177,7 @@ impl Pipeline {
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: "fs_main",
-                    targets: &[wgpu::ColorTargetState {
+                    targets: &[Some(wgpu::ColorTargetState {
                         format,
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent {
@@ -191,7 +192,7 @@ impl Pipeline {
                             },
                         }),
                         write_mask: wgpu::ColorWrites::ALL,
-                    }],
+                    })],
                 }),
                 primitive: wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::TriangleList,
@@ -236,17 +237,17 @@ impl Pipeline {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(
-                    &texture_atlas.view(),
+                    texture_atlas.view(),
                 ),
             }],
         });
 
         Pipeline {
-            #[cfg(feature = "image_rs")]
-            raster_cache: RefCell::new(raster::Cache::new()),
+            #[cfg(feature = "image")]
+            raster_cache: RefCell::new(raster::Cache::default()),
 
             #[cfg(feature = "svg")]
-            vector_cache: RefCell::new(vector::Cache::new()),
+            vector_cache: RefCell::new(vector::Cache::default()),
 
             pipeline,
             uniforms: uniforms_buffer,
@@ -261,18 +262,18 @@ impl Pipeline {
         }
     }
 
-    #[cfg(feature = "image_rs")]
-    pub fn dimensions(&self, handle: &image::Handle) -> (u32, u32) {
+    #[cfg(feature = "image")]
+    pub fn dimensions(&self, handle: &image::Handle) -> Size<u32> {
         let mut cache = self.raster_cache.borrow_mut();
-        let memory = cache.load(&handle);
+        let memory = cache.load(handle);
 
         memory.dimensions()
     }
 
     #[cfg(feature = "svg")]
-    pub fn viewport_dimensions(&self, handle: &svg::Handle) -> (u32, u32) {
+    pub fn viewport_dimensions(&self, handle: &svg::Handle) -> Size<u32> {
         let mut cache = self.vector_cache.borrow_mut();
-        let svg = cache.load(&handle);
+        let svg = cache.load(handle);
 
         svg.viewport_dimensions()
     }
@@ -290,7 +291,7 @@ impl Pipeline {
     ) {
         let instances: &mut Vec<Instance> = &mut Vec::new();
 
-        #[cfg(feature = "image_rs")]
+        #[cfg(feature = "image")]
         let mut raster_cache = self.raster_cache.borrow_mut();
 
         #[cfg(feature = "svg")]
@@ -298,12 +299,11 @@ impl Pipeline {
 
         for image in images {
             match &image {
-                #[cfg(feature = "image_rs")]
+                #[cfg(feature = "image")]
                 layer::Image::Raster { handle, bounds } => {
                     if let Some(atlas_entry) = raster_cache.upload(
                         handle,
-                        device,
-                        encoder,
+                        &mut (device, encoder),
                         &mut self.texture_atlas,
                     ) {
                         add_instances(
@@ -314,19 +314,23 @@ impl Pipeline {
                         );
                     }
                 }
-                #[cfg(not(feature = "image_rs"))]
+                #[cfg(not(feature = "image"))]
                 layer::Image::Raster { .. } => {}
 
                 #[cfg(feature = "svg")]
-                layer::Image::Vector { handle, bounds } => {
+                layer::Image::Vector {
+                    handle,
+                    color,
+                    bounds,
+                } => {
                     let size = [bounds.width, bounds.height];
 
                     if let Some(atlas_entry) = vector_cache.upload(
                         handle,
+                        *color,
                         size,
                         _scale,
-                        device,
-                        encoder,
+                        &mut (device, encoder),
                         &mut self.texture_atlas,
                     ) {
                         add_instances(
@@ -358,7 +362,7 @@ impl Pipeline {
                     entries: &[wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::TextureView(
-                            &self.texture_atlas.view(),
+                            self.texture_atlas.view(),
                         ),
                     }],
                 });
@@ -406,14 +410,16 @@ impl Pipeline {
             let mut render_pass =
                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("iced_wgpu::image render pass"),
-                    color_attachments: &[wgpu::RenderPassColorAttachment {
-                        view: target,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: true,
+                    color_attachments: &[Some(
+                        wgpu::RenderPassColorAttachment {
+                            view: target,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: true,
+                            },
                         },
-                    }],
+                    )],
                     depth_stencil_attachment: None,
                 });
 
@@ -444,12 +450,20 @@ impl Pipeline {
         }
     }
 
-    pub fn trim_cache(&mut self) {
-        #[cfg(feature = "image_rs")]
-        self.raster_cache.borrow_mut().trim(&mut self.texture_atlas);
+    pub fn trim_cache(
+        &mut self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
+        #[cfg(feature = "image")]
+        self.raster_cache
+            .borrow_mut()
+            .trim(&mut self.texture_atlas, &mut (device, encoder));
 
         #[cfg(feature = "svg")]
-        self.vector_cache.borrow_mut().trim(&mut self.texture_atlas);
+        self.vector_cache
+            .borrow_mut()
+            .trim(&mut self.texture_atlas, &mut (device, encoder));
     }
 }
 
@@ -507,15 +521,18 @@ fn add_instances(
             add_instance(image_position, image_size, allocation, instances);
         }
         atlas::Entry::Fragmented { fragments, size } => {
-            let scaling_x = image_size[0] / size.0 as f32;
-            let scaling_y = image_size[1] / size.1 as f32;
+            let scaling_x = image_size[0] / size.width as f32;
+            let scaling_y = image_size[1] / size.height as f32;
 
             for fragment in fragments {
                 let allocation = &fragment.allocation;
 
                 let [x, y] = image_position;
                 let (fragment_x, fragment_y) = fragment.position;
-                let (fragment_width, fragment_height) = allocation.size();
+                let Size {
+                    width: fragment_width,
+                    height: fragment_height,
+                } = allocation.size();
 
                 let position = [
                     x + fragment_x as f32 * scaling_x,
@@ -541,7 +558,7 @@ fn add_instance(
     instances: &mut Vec<Instance>,
 ) {
     let (x, y) = allocation.position();
-    let (width, height) = allocation.size();
+    let Size { width, height } = allocation.size();
     let layer = allocation.layer();
 
     let instance = Instance {

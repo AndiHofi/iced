@@ -1,5 +1,7 @@
-use crate::window;
-use crate::{Color, Command, Element, Executor, Settings, Subscription};
+//! Build interactive cross-platform applications.
+use crate::{Command, Element, Executor, Settings, Subscription};
+
+pub use iced_native::application::{Appearance, StyleSheet};
 
 /// An interactive cross-platform application.
 ///
@@ -37,15 +39,15 @@ use crate::{Color, Command, Element, Executor, Settings, Subscription};
 /// to listen to time.
 /// - [`todos`], a todos tracker inspired by [TodoMVC].
 ///
-/// [The repository has a bunch of examples]: https://github.com/hecrj/iced/tree/0.3/examples
-/// [`clock`]: https://github.com/hecrj/iced/tree/0.3/examples/clock
-/// [`download_progress`]: https://github.com/hecrj/iced/tree/0.3/examples/download_progress
-/// [`events`]: https://github.com/hecrj/iced/tree/0.3/examples/events
-/// [`game_of_life`]: https://github.com/hecrj/iced/tree/0.3/examples/game_of_life
-/// [`pokedex`]: https://github.com/hecrj/iced/tree/0.3/examples/pokedex
-/// [`solar_system`]: https://github.com/hecrj/iced/tree/0.3/examples/solar_system
-/// [`stopwatch`]: https://github.com/hecrj/iced/tree/0.3/examples/stopwatch
-/// [`todos`]: https://github.com/hecrj/iced/tree/0.3/examples/todos
+/// [The repository has a bunch of examples]: https://github.com/iced-rs/iced/tree/0.6/examples
+/// [`clock`]: https://github.com/iced-rs/iced/tree/0.6/examples/clock
+/// [`download_progress`]: https://github.com/iced-rs/iced/tree/0.6/examples/download_progress
+/// [`events`]: https://github.com/iced-rs/iced/tree/0.6/examples/events
+/// [`game_of_life`]: https://github.com/iced-rs/iced/tree/0.6/examples/game_of_life
+/// [`pokedex`]: https://github.com/iced-rs/iced/tree/0.6/examples/pokedex
+/// [`solar_system`]: https://github.com/iced-rs/iced/tree/0.6/examples/solar_system
+/// [`stopwatch`]: https://github.com/iced-rs/iced/tree/0.6/examples/stopwatch
+/// [`todos`]: https://github.com/iced-rs/iced/tree/0.6/examples/todos
 /// [`Sandbox`]: crate::Sandbox
 /// [`Canvas`]: crate::widget::Canvas
 /// [PokéAPI]: https://pokeapi.co/
@@ -57,7 +59,8 @@ use crate::{Color, Command, Element, Executor, Settings, Subscription};
 /// says "Hello, world!":
 ///
 /// ```no_run
-/// use iced::{executor, Application, Command, Element, Settings, Text};
+/// use iced::executor;
+/// use iced::{Application, Command, Element, Settings, Theme};
 ///
 /// pub fn main() -> iced::Result {
 ///     Hello::run(Settings::default())
@@ -67,8 +70,9 @@ use crate::{Color, Command, Element, Executor, Settings, Subscription};
 ///
 /// impl Application for Hello {
 ///     type Executor = executor::Default;
-///     type Message = ();
 ///     type Flags = ();
+///     type Message = ();
+///     type Theme = Theme;
 ///
 ///     fn new(_flags: ()) -> (Hello, Command<Self::Message>) {
 ///         (Hello, Command::none())
@@ -82,8 +86,8 @@ use crate::{Color, Command, Element, Executor, Settings, Subscription};
 ///         Command::none()
 ///     }
 ///
-///     fn view(&mut self) -> Element<Self::Message> {
-///         Text::new("Hello, world!").into()
+///     fn view(&self) -> Element<Self::Message> {
+///         "Hello, world!".into()
 ///     }
 /// }
 /// ```
@@ -98,6 +102,9 @@ pub trait Application: Sized {
 
     /// The type of __messages__ your [`Application`] will produce.
     type Message: std::fmt::Debug + Send;
+
+    /// The theme of your [`Application`].
+    type Theme: Default + StyleSheet;
 
     /// The data needed to initialize your [`Application`].
     type Flags;
@@ -129,6 +136,25 @@ pub trait Application: Sized {
     /// Any [`Command`] returned will be executed immediately in the background.
     fn update(&mut self, message: Self::Message) -> Command<Self::Message>;
 
+    /// Returns the widgets to display in the [`Application`].
+    ///
+    /// These widgets can produce __messages__ based on user interaction.
+    fn view(&self) -> Element<'_, Self::Message, crate::Renderer<Self::Theme>>;
+
+    /// Returns the current [`Theme`] of the [`Application`].
+    ///
+    /// [`Theme`]: Self::Theme
+    fn theme(&self) -> Self::Theme {
+        Self::Theme::default()
+    }
+
+    /// Returns the current `Style` of the [`Theme`].
+    ///
+    /// [`Theme`]: Self::Theme
+    fn style(&self) -> <Self::Theme as StyleSheet>::Style {
+        <Self::Theme as StyleSheet>::Style::default()
+    }
+
     /// Returns the event [`Subscription`] for the current state of the
     /// application.
     ///
@@ -139,30 +165,6 @@ pub trait Application: Sized {
     /// By default, this method returns an empty [`Subscription`].
     fn subscription(&self) -> Subscription<Self::Message> {
         Subscription::none()
-    }
-
-    /// Returns the widgets to display in the [`Application`].
-    ///
-    /// These widgets can produce __messages__ based on user interaction.
-    fn view(&mut self) -> Element<'_, Self::Message>;
-
-    /// Returns the current [`Application`] mode.
-    ///
-    /// The runtime will automatically transition your application if a new mode
-    /// is returned.
-    ///
-    /// Currently, the mode only has an effect in native platforms.
-    ///
-    /// By default, an application will run in windowed mode.
-    fn mode(&self) -> window::Mode {
-        window::Mode::Windowed
-    }
-
-    /// Returns the background color of the [`Application`].
-    ///
-    /// By default, it returns [`Color::WHITE`].
-    fn background_color(&self) -> Color {
-        Color::WHITE
     }
 
     /// Returns the scale factor of the [`Application`].
@@ -198,6 +200,7 @@ pub trait Application: Sized {
     where
         Self: 'static,
     {
+        #[allow(clippy::needless_update)]
         let renderer_settings = crate::renderer::Settings {
             default_font: settings.default_font,
             default_text_size: settings.default_text_size,
@@ -213,7 +216,7 @@ pub trait Application: Sized {
         Ok(crate::runtime::application::run::<
             Instance<Self>,
             Self::Executor,
-            crate::renderer::window::Compositor,
+            crate::renderer::window::Compositor<Self::Theme>,
         >(settings.into(), renderer_settings)?)
     }
 }
@@ -224,14 +227,14 @@ impl<A> iced_winit::Program for Instance<A>
 where
     A: Application,
 {
-    type Renderer = crate::renderer::Renderer;
+    type Renderer = crate::Renderer<A::Theme>;
     type Message = A::Message;
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         self.0.update(message)
     }
 
-    fn view(&mut self) -> Element<'_, Self::Message> {
+    fn view(&self) -> Element<'_, Self::Message, Self::Renderer> {
         self.0.view()
     }
 }
@@ -252,27 +255,19 @@ where
         self.0.title()
     }
 
-    fn mode(&self) -> iced_winit::Mode {
-        match self.0.mode() {
-            window::Mode::Windowed => iced_winit::Mode::Windowed,
-            window::Mode::Fullscreen => iced_winit::Mode::Fullscreen,
-            window::Mode::Hidden => iced_winit::Mode::Hidden,
-        }
+    fn theme(&self) -> A::Theme {
+        self.0.theme()
+    }
+
+    fn style(&self) -> <A::Theme as StyleSheet>::Style {
+        self.0.style()
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
         self.0.subscription()
     }
 
-    fn background_color(&self) -> Color {
-        self.0.background_color()
-    }
-
     fn scale_factor(&self) -> f64 {
         self.0.scale_factor()
-    }
-
-    fn should_exit(&self) -> bool {
-        self.0.should_exit()
     }
 }

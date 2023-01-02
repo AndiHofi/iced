@@ -1,18 +1,21 @@
 use crate::{Backend, Color, Error, Renderer, Settings, Viewport};
 
-use core::ffi::c_void;
 use glow::HasContext;
-use iced_graphics::{Antialiasing, Size};
+use iced_graphics::{compositor, Antialiasing, Size};
+
+use core::ffi::c_void;
+use std::marker::PhantomData;
 
 /// A window graphics backend for iced powered by `glow`.
 #[allow(missing_debug_implementations)]
-pub struct Compositor {
+pub struct Compositor<Theme> {
     gl: glow::Context,
+    theme: PhantomData<Theme>,
 }
 
-impl iced_graphics::window::GLCompositor for Compositor {
+impl<Theme> iced_graphics::window::GLCompositor for Compositor<Theme> {
     type Settings = Settings;
-    type Renderer = Renderer;
+    type Renderer = Renderer<Theme>;
 
     unsafe fn new(
         settings: Self::Settings,
@@ -20,9 +23,14 @@ impl iced_graphics::window::GLCompositor for Compositor {
     ) -> Result<(Self, Self::Renderer), Error> {
         let gl = glow::Context::from_loader_function(loader_function);
 
+        log::info!("{:#?}", settings);
+
         let version = gl.version();
-        log::info!("Version: {:?}", version);
-        log::info!("Embedded: {}", version.is_embedded);
+        log::info!(
+            "OpenGL version: {:?} (Embedded: {})",
+            version,
+            version.is_embedded
+        );
 
         let renderer = gl.get_parameter_string(glow::RENDERER);
         log::info!("Renderer: {}", renderer);
@@ -44,7 +52,13 @@ impl iced_graphics::window::GLCompositor for Compositor {
 
         let renderer = Renderer::new(Backend::new(&gl, settings));
 
-        Ok((Self { gl }, renderer))
+        Ok((
+            Self {
+                gl,
+                theme: PhantomData,
+            },
+            renderer,
+        ))
     }
 
     fn sample_count(settings: &Settings) -> u32 {
@@ -62,6 +76,15 @@ impl iced_graphics::window::GLCompositor for Compositor {
                 physical_size.width as i32,
                 physical_size.height as i32,
             );
+        }
+    }
+
+    fn fetch_information(&self) -> compositor::Information {
+        let adapter = unsafe { self.gl.get_parameter_string(glow::RENDERER) };
+
+        compositor::Information {
+            backend: format!("{:?}", self.gl.version()),
+            adapter,
         }
     }
 

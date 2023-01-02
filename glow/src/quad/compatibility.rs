@@ -70,11 +70,10 @@ impl Pipeline {
         unsafe {
             gl.use_program(Some(program));
 
-            let matrix: [f32; 16] = Transformation::identity().into();
             gl.uniform_matrix_4_f32_slice(
                 Some(&transform_location),
                 false,
-                &matrix,
+                Transformation::identity().as_ref(),
             );
 
             gl.uniform_1_f32(Some(&scale_location), 1.0);
@@ -110,22 +109,13 @@ impl Pipeline {
         bounds: Rectangle<u32>,
     ) {
         // TODO: Remove this allocation (probably by changing the shader and removing the need of two `position`)
-        let vertices: Vec<Vertex> = instances
-            .iter()
-            .flat_map(|quad| Vertex::from_quad(quad))
-            .collect();
+        let vertices: Vec<Vertex> =
+            instances.iter().flat_map(Vertex::from_quad).collect();
 
         // TODO: Remove this allocation (or allocate only when needed)
         let indices: Vec<i32> = (0..instances.len().min(MAX_QUADS) as i32)
             .flat_map(|i| {
-                [
-                    0 + i * 4,
-                    1 + i * 4,
-                    2 + i * 4,
-                    2 + i * 4,
-                    1 + i * 4,
-                    3 + i * 4,
-                ]
+                [i * 4, 1 + i * 4, 2 + i * 4, 2 + i * 4, 1 + i * 4, 3 + i * 4]
             })
             .cycle()
             .take(instances.len() * 6)
@@ -148,11 +138,10 @@ impl Pipeline {
 
         if transformation != self.current_transform {
             unsafe {
-                let matrix: [f32; 16] = transformation.into();
                 gl.uniform_matrix_4_f32_slice(
                     Some(&self.transform_location),
                     false,
-                    &matrix,
+                    transformation.as_ref(),
                 );
 
                 self.current_transform = transformation;
@@ -187,13 +176,13 @@ impl Pipeline {
                 gl.buffer_sub_data_u8_slice(
                     glow::ARRAY_BUFFER,
                     0,
-                    bytemuck::cast_slice(&vertices),
+                    bytemuck::cast_slice(vertices),
                 );
 
                 gl.buffer_sub_data_u8_slice(
                     glow::ELEMENT_ARRAY_BUFFER,
                     0,
-                    bytemuck::cast_slice(&indices),
+                    bytemuck::cast_slice(indices),
                 );
 
                 gl.draw_elements(
@@ -265,7 +254,7 @@ unsafe fn create_buffers(
     gl.enable_vertex_attrib_array(4);
     gl.vertex_attrib_pointer_f32(
         4,
-        1,
+        4,
         glow::FLOAT,
         false,
         stride,
@@ -279,7 +268,7 @@ unsafe fn create_buffers(
         glow::FLOAT,
         false,
         stride,
-        4 * (2 + 2 + 4 + 4 + 1),
+        4 * (2 + 2 + 4 + 4 + 4),
     );
 
     gl.enable_vertex_attrib_array(6);
@@ -289,7 +278,7 @@ unsafe fn create_buffers(
         glow::FLOAT,
         false,
         stride,
-        4 * (2 + 2 + 4 + 4 + 1 + 1),
+        4 * (2 + 2 + 4 + 4 + 4 + 1),
     );
 
     gl.bind_vertex_array(None);
@@ -318,7 +307,7 @@ pub struct Vertex {
     pub border_color: [f32; 4],
 
     /// The border radius of the [`Vertex`].
-    pub border_radius: f32,
+    pub border_radius: [f32; 4],
 
     /// The border width of the [`Vertex`].
     pub border_width: f32,

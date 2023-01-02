@@ -2,6 +2,7 @@
 use crate::mouse;
 use crate::{Error, Executor, Runtime};
 
+pub use iced_winit::application::StyleSheet;
 pub use iced_winit::Application;
 
 use iced_graphics::window;
@@ -9,8 +10,9 @@ use iced_winit::application;
 use iced_winit::conversion;
 use iced_winit::futures;
 use iced_winit::futures::channel::mpsc;
+use iced_winit::renderer;
 use iced_winit::user_interface;
-use iced_winit::{Clipboard, Debug, Proxy, Settings};
+use iced_winit::{Clipboard, Command, Debug, Proxy, Settings};
 
 use glutin::window::Window;
 use std::mem::ManuallyDrop;
@@ -25,20 +27,21 @@ where
     A: Application + 'static,
     E: Executor + 'static,
     C: window::GLCompositor<Renderer = A::Renderer> + 'static,
+    <A::Renderer as iced_native::Renderer>::Theme: StyleSheet,
 {
     use futures::task;
     use futures::Future;
-    use glutin::event_loop::EventLoop;
+    use glutin::event_loop::EventLoopBuilder;
     use glutin::platform::run_return::EventLoopExtRunReturn;
     use glutin::ContextBuilder;
 
     let mut debug = Debug::new();
     debug.startup_started();
 
-    let mut event_loop = EventLoop::with_user_event();
-    let mut proxy = event_loop.create_proxy();
+    let mut event_loop = EventLoopBuilder::with_user_event().build();
+    let proxy = event_loop.create_proxy();
 
-    let mut runtime = {
+    let runtime = {
         let executor = E::new().map_err(Error::ExecutorCreationFailed)?;
         let proxy = Proxy::new(event_loop.create_proxy());
 
@@ -51,15 +54,14 @@ where
         runtime.enter(|| A::new(flags))
     };
 
-    let subscription = application.subscription();
-
     let context = {
         let builder = settings.window.into_builder(
             &application.title(),
-            application.mode(),
             event_loop.primary_monitor(),
             settings.id,
         );
+
+        log::info!("Window builder: {:#?}", builder);
 
         let opengl_builder = ContextBuilder::new()
             .with_vsync(true)
@@ -75,17 +77,35 @@ where
             (opengl_builder, opengles_builder)
         };
 
+        log::info!("Trying first builder: {:#?}", first_builder);
+
         let context = first_builder
             .build_windowed(builder.clone(), &event_loop)
-            .or_else(|_| second_builder.build_windowed(builder, &event_loop))
+            .or_else(|_| {
+                log::info!("Trying second builder: {:#?}", second_builder);
+                second_builder.build_windowed(builder, &event_loop)
+            })
             .map_err(|error| {
                 use glutin::CreationError;
+                use iced_graphics::Error as ContextError;
 
                 match error {
                     CreationError::Window(error) => {
                         Error::WindowCreationFailed(error)
                     }
-                    _ => Error::GraphicsAdapterNotFound,
+                    CreationError::OpenGlVersionNotSupported => {
+                        Error::GraphicsCreationFailed(
+                            ContextError::VersionNotSupported,
+                        )
+                    }
+                    CreationError::NoAvailablePixelFormat => {
+                        Error::GraphicsCreationFailed(
+                            ContextError::NoAvailablePixelFormat,
+                        )
+                    }
+                    error => Error::GraphicsCreationFailed(
+                        ContextError::BackendError(error.to_string()),
+                    ),
                 }
             })?;
 
@@ -102,17 +122,6 @@ where
         })?
     };
 
-    let mut clipboard = Clipboard::connect(context.window());
-
-    application::run_command(
-        init_command,
-        &mut runtime,
-        &mut clipboard,
-        &mut proxy,
-        context.window(),
-    );
-    runtime.track(subscription);
-
     let (mut sender, receiver) = mpsc::unbounded();
 
     let mut instance = Box::pin(run_instance::<A, E, C>(
@@ -120,20 +129,20 @@ where
         compositor,
         renderer,
         runtime,
-        clipboard,
         proxy,
         debug,
         receiver,
         context,
+        init_command,
         settings.exit_on_close_request,
     ));
 
     let mut context = task::Context::from_waker(task::noop_waker_ref());
 
-    event_loop.run_return(move |event, _, control_flow| {
+    let _ = event_loop.run_return(move |event, _, control_flow| {
         use glutin::event_loop::ControlFlow;
 
-        if let ControlFlow::Exit = control_flow {
+        if let ControlFlow::ExitWithCode(_) = control_flow {
             return;
         }
 
@@ -172,25 +181,46 @@ async fn run_instance<A, E, C>(
     mut compositor: C,
     mut renderer: A::Renderer,
     mut runtime: Runtime<E, Proxy<A::Message>, A::Message>,
-    mut clipboard: Clipboard,
     mut proxy: glutin::event_loop::EventLoopProxy<A::Message>,
     mut debug: Debug,
     mut receiver: mpsc::UnboundedReceiver<glutin::event::Event<'_, A::Message>>,
     mut context: glutin::ContextWrapper<glutin::PossiblyCurrent, Window>,
+    init_command: Command<A::Message>,
     exit_on_close_request: bool,
 ) where
     A: Application + 'static,
     E: Executor + 'static,
     C: window::GLCompositor<Renderer = A::Renderer> + 'static,
+    <A::Renderer as iced_native::Renderer>::Theme: StyleSheet,
 {
     use glutin::event;
     use iced_winit::futures::stream::StreamExt;
 
+    let mut clipboard = Clipboard::connect(context.window());
+    let mut cache = user_interface::Cache::default();
     let mut state = application::State::new(&application, context.window());
     let mut viewport_version = state.viewport_version();
+    let mut should_exit = false;
+
+    application::run_command(
+        &application,
+        &mut cache,
+        &state,
+        &mut renderer,
+        init_command,
+        &mut runtime,
+        &mut clipboard,
+        &mut should_exit,
+        &mut proxy,
+        &mut debug,
+        context.window(),
+        || compositor.fetch_information(),
+    );
+    runtime.track(application.subscription());
+
     let mut user_interface =
         ManuallyDrop::new(application::build_user_interface(
-            &mut application,
+            &application,
             user_interface::Cache::default(),
             &mut renderer,
             state.logical_size(),
@@ -232,28 +262,31 @@ async fn run_instance<A, E, C>(
                         user_interface::State::Outdated
                     )
                 {
-                    let cache =
+                    let mut cache =
                         ManuallyDrop::into_inner(user_interface).into_cache();
 
                     // Update application
                     application::update(
                         &mut application,
+                        &mut cache,
+                        &state,
+                        &mut renderer,
                         &mut runtime,
                         &mut clipboard,
+                        &mut should_exit,
                         &mut proxy,
                         &mut debug,
                         &mut messages,
                         context.window(),
+                        || compositor.fetch_information(),
                     );
 
                     // Update window
                     state.synchronize(&application, context.window());
 
-                    let should_exit = application.should_exit();
-
                     user_interface =
                         ManuallyDrop::new(application::build_user_interface(
-                            &mut application,
+                            &application,
                             cache,
                             &mut renderer,
                             state.logical_size(),
@@ -266,8 +299,14 @@ async fn run_instance<A, E, C>(
                 }
 
                 debug.draw_started();
-                let new_mouse_interaction =
-                    user_interface.draw(&mut renderer, state.cursor_position());
+                let new_mouse_interaction = user_interface.draw(
+                    &mut renderer,
+                    state.theme(),
+                    &renderer::Style {
+                        text_color: state.text_color(),
+                    },
+                    state.cursor_position(),
+                );
                 debug.draw_finished();
 
                 if new_mouse_interaction != mouse_interaction {
@@ -319,8 +358,14 @@ async fn run_instance<A, E, C>(
                     debug.layout_finished();
 
                     debug.draw_started();
-                    let new_mouse_interaction = user_interface
-                        .draw(&mut renderer, state.cursor_position());
+                    let new_mouse_interaction = user_interface.draw(
+                        &mut renderer,
+                        state.theme(),
+                        &renderer::Style {
+                            text_color: state.text_color(),
+                        },
+                        state.cursor_position(),
+                    );
                     debug.draw_finished();
 
                     if new_mouse_interaction != mouse_interaction {

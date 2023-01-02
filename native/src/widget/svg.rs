@@ -1,11 +1,16 @@
 //! Display vector graphics in your application.
 use crate::layout;
 use crate::renderer;
-use crate::svg::{self, Handle};
-use crate::{Element, Hasher, Layout, Length, Point, Rectangle, Size, Widget};
+use crate::svg;
+use crate::widget::Tree;
+use crate::{
+    ContentFit, Element, Layout, Length, Point, Rectangle, Size, Vector, Widget,
+};
 
-use std::hash::Hash;
 use std::path::PathBuf;
+
+pub use iced_style::svg::{Appearance, StyleSheet};
+pub use svg::Handle;
 
 /// A vector graphics image.
 ///
@@ -13,45 +18,82 @@ use std::path::PathBuf;
 ///
 /// [`Svg`] images can have a considerable rendering cost when resized,
 /// specially when they are complex.
-#[derive(Debug, Clone)]
-pub struct Svg {
+#[allow(missing_debug_implementations)]
+pub struct Svg<Renderer>
+where
+    Renderer: svg::Renderer,
+    Renderer::Theme: StyleSheet,
+{
     handle: Handle,
     width: Length,
     height: Length,
+    content_fit: ContentFit,
+    style: <Renderer::Theme as StyleSheet>::Style,
 }
 
-impl Svg {
+impl<Renderer> Svg<Renderer>
+where
+    Renderer: svg::Renderer,
+    Renderer::Theme: StyleSheet,
+{
     /// Creates a new [`Svg`] from the given [`Handle`].
     pub fn new(handle: impl Into<Handle>) -> Self {
         Svg {
             handle: handle.into(),
             width: Length::Fill,
             height: Length::Shrink,
+            content_fit: ContentFit::Contain,
+            style: Default::default(),
         }
     }
 
     /// Creates a new [`Svg`] that will display the contents of the file at the
     /// provided path.
+    #[must_use]
     pub fn from_path(path: impl Into<PathBuf>) -> Self {
         Self::new(Handle::from_path(path))
     }
 
     /// Sets the width of the [`Svg`].
+    #[must_use]
     pub fn width(mut self, width: Length) -> Self {
         self.width = width;
         self
     }
 
     /// Sets the height of the [`Svg`].
+    #[must_use]
     pub fn height(mut self, height: Length) -> Self {
         self.height = height;
         self
     }
+
+    /// Sets the [`ContentFit`] of the [`Svg`].
+    ///
+    /// Defaults to [`ContentFit::Contain`]
+    #[must_use]
+    pub fn content_fit(self, content_fit: ContentFit) -> Self {
+        Self {
+            content_fit,
+            ..self
+        }
+    }
+
+    /// Sets the style variant of this [`Svg`].
+    #[must_use]
+    pub fn style(
+        mut self,
+        style: <Renderer::Theme as StyleSheet>::Style,
+    ) -> Self {
+        self.style = style;
+        self
+    }
 }
 
-impl<Message, Renderer> Widget<Message, Renderer> for Svg
+impl<Message, Renderer> Widget<Message, Renderer> for Svg<Renderer>
 where
     Renderer: svg::Renderer,
+    Renderer::Theme: iced_style::svg::StyleSheet,
 {
     fn width(&self) -> Length {
         self.width
@@ -66,51 +108,88 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let (width, height) = renderer.dimensions(&self.handle);
+        // The raw w/h of the underlying image
+        let Size { width, height } = renderer.dimensions(&self.handle);
+        let image_size = Size::new(width as f32, height as f32);
 
-        let aspect_ratio = width as f32 / height as f32;
-
-        let mut size = limits
+        // The size to be available to the widget prior to `Shrink`ing
+        let raw_size = limits
             .width(self.width)
             .height(self.height)
-            .resolve(Size::new(width as f32, height as f32));
+            .resolve(image_size);
 
-        let viewport_aspect_ratio = size.width / size.height;
+        // The uncropped size of the image when fit to the bounds above
+        let full_size = self.content_fit.fit(image_size, raw_size);
 
-        if viewport_aspect_ratio > aspect_ratio {
-            size.width = width as f32 * size.height / height as f32;
-        } else {
-            size.height = height as f32 * size.width / width as f32;
-        }
+        // Shrink the widget to fit the resized image, if requested
+        let final_size = Size {
+            width: match self.width {
+                Length::Shrink => f32::min(raw_size.width, full_size.width),
+                _ => raw_size.width,
+            },
+            height: match self.height {
+                Length::Shrink => f32::min(raw_size.height, full_size.height),
+                _ => raw_size.height,
+            },
+        };
 
-        layout::Node::new(size)
+        layout::Node::new(final_size)
     }
 
     fn draw(
         &self,
+        _state: &Tree,
         renderer: &mut Renderer,
+        theme: &Renderer::Theme,
         _style: &renderer::Style,
         layout: Layout<'_>,
         _cursor_position: Point,
         _viewport: &Rectangle,
     ) {
-        renderer.draw(self.handle.clone(), layout.bounds())
-    }
+        let Size { width, height } = renderer.dimensions(&self.handle);
+        let image_size = Size::new(width as f32, height as f32);
 
-    fn hash_layout(&self, state: &mut Hasher) {
-        std::any::TypeId::of::<Svg>().hash(state);
+        let bounds = layout.bounds();
+        let adjusted_fit = self.content_fit.fit(image_size, bounds.size());
 
-        self.handle.hash(state);
-        self.width.hash(state);
-        self.height.hash(state);
+        let render = |renderer: &mut Renderer| {
+            let offset = Vector::new(
+                (bounds.width - adjusted_fit.width).max(0.0) / 2.0,
+                (bounds.height - adjusted_fit.height).max(0.0) / 2.0,
+            );
+
+            let drawing_bounds = Rectangle {
+                width: adjusted_fit.width,
+                height: adjusted_fit.height,
+                ..bounds
+            };
+
+            let appearance = theme.appearance(&self.style);
+
+            renderer.draw(
+                self.handle.clone(),
+                appearance.color,
+                drawing_bounds + offset,
+            );
+        };
+
+        if adjusted_fit.width > bounds.width
+            || adjusted_fit.height > bounds.height
+        {
+            renderer.with_layer(bounds, render);
+        } else {
+            render(renderer);
+        }
     }
 }
 
-impl<'a, Message, Renderer> From<Svg> for Element<'a, Message, Renderer>
+impl<'a, Message, Renderer> From<Svg<Renderer>>
+    for Element<'a, Message, Renderer>
 where
-    Renderer: svg::Renderer,
+    Renderer: svg::Renderer + 'a,
+    Renderer::Theme: iced_style::svg::StyleSheet,
 {
-    fn from(icon: Svg) -> Element<'a, Message, Renderer> {
+    fn from(icon: Svg<Renderer>) -> Element<'a, Message, Renderer> {
         Element::new(icon)
     }
 }

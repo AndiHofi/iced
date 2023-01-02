@@ -6,10 +6,18 @@
 //! Inspired by the example found in the MDN docs[1].
 //!
 //! [1]: https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Basic_animations#An_animated_solar_system
+use iced::application;
+use iced::executor;
+use iced::theme::{self, Theme};
+use iced::time;
+use iced::widget::canvas;
+use iced::widget::canvas::gradient::{self, Gradient};
+use iced::widget::canvas::stroke::{self, Stroke};
+use iced::widget::canvas::{Cursor, Path};
+use iced::window;
 use iced::{
-    canvas::{self, Cursor, Path, Stroke},
-    executor, time, window, Application, Canvas, Color, Command, Element,
-    Length, Point, Rectangle, Settings, Size, Subscription, Vector,
+    Application, Color, Command, Element, Length, Point, Rectangle, Settings,
+    Size, Subscription, Vector,
 };
 
 use std::time::Instant;
@@ -33,6 +41,7 @@ enum Message {
 impl Application for SolarSystem {
     type Executor = executor::Default;
     type Message = Message;
+    type Theme = Theme;
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
@@ -58,16 +67,30 @@ impl Application for SolarSystem {
         Command::none()
     }
 
-    fn subscription(&self) -> Subscription<Message> {
-        time::every(std::time::Duration::from_millis(10))
-            .map(|instant| Message::Tick(instant))
-    }
-
-    fn view(&mut self) -> Element<Message> {
-        Canvas::new(&mut self.state)
+    fn view(&self) -> Element<Message> {
+        canvas(&self.state)
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
+    }
+
+    fn theme(&self) -> Theme {
+        Theme::Dark
+    }
+
+    fn style(&self) -> theme::Application {
+        fn dark_background(_theme: &Theme) -> application::Appearance {
+            application::Appearance {
+                background_color: Color::BLACK,
+                text_color: Color::WHITE,
+            }
+        }
+
+        theme::Application::from(dark_background as fn(&Theme) -> _)
+    }
+
+    fn subscription(&self) -> Subscription<Message> {
+        time::every(time::Duration::from_millis(10)).map(Message::Tick)
     }
 }
 
@@ -129,23 +152,23 @@ impl State {
 }
 
 impl<Message> canvas::Program<Message> for State {
+    type State = ();
+
     fn draw(
         &self,
+        _state: &Self::State,
+        _theme: &Theme,
         bounds: Rectangle,
         _cursor: Cursor,
     ) -> Vec<canvas::Geometry> {
         use std::f32::consts::PI;
 
         let background = self.space_cache.draw(bounds.size(), |frame| {
-            let space = Path::rectangle(Point::new(0.0, 0.0), frame.size());
-
             let stars = Path::new(|path| {
                 for (p, size) in &self.stars {
                     path.rectangle(*p, Size::new(*size, *size));
                 }
             });
-
-            frame.fill(&space, Color::BLACK);
 
             frame.translate(frame.center() - Point::ORIGIN);
             frame.fill(&stars, Color::WHITE);
@@ -161,8 +184,14 @@ impl<Message> canvas::Program<Message> for State {
             frame.stroke(
                 &orbit,
                 Stroke {
+                    style: stroke::Style::Solid(Color::from_rgba8(
+                        0, 153, 255, 0.1,
+                    )),
                     width: 1.0,
-                    color: Color::from_rgba8(0, 153, 255, 0.1),
+                    line_dash: canvas::LineDash {
+                        offset: 0,
+                        segments: &[3.0, 6.0],
+                    },
                     ..Stroke::default()
                 },
             );
@@ -177,15 +206,18 @@ impl<Message> canvas::Program<Message> for State {
                 frame.translate(Vector::new(Self::ORBIT_RADIUS, 0.0));
 
                 let earth = Path::circle(Point::ORIGIN, Self::EARTH_RADIUS);
-                let shadow = Path::rectangle(
-                    Point::new(0.0, -Self::EARTH_RADIUS),
-                    Size::new(
-                        Self::EARTH_RADIUS * 4.0,
-                        Self::EARTH_RADIUS * 2.0,
-                    ),
-                );
 
-                frame.fill(&earth, Color::from_rgb8(0x6B, 0x93, 0xD6));
+                let earth_fill =
+                    Gradient::linear(gradient::Position::Absolute {
+                        start: Point::new(-Self::EARTH_RADIUS, 0.0),
+                        end: Point::new(Self::EARTH_RADIUS, 0.0),
+                    })
+                    .add_stop(0.2, Color::from_rgb(0.15, 0.50, 1.0))
+                    .add_stop(0.8, Color::from_rgb(0.0, 0.20, 0.47))
+                    .build()
+                    .expect("Build Earth fill gradient");
+
+                frame.fill(&earth, earth_fill);
 
                 frame.with_save(|frame| {
                     frame.rotate(rotation * 10.0);
@@ -194,14 +226,6 @@ impl<Message> canvas::Program<Message> for State {
                     let moon = Path::circle(Point::ORIGIN, Self::MOON_RADIUS);
                     frame.fill(&moon, Color::WHITE);
                 });
-
-                frame.fill(
-                    &shadow,
-                    Color {
-                        a: 0.7,
-                        ..Color::BLACK
-                    },
-                );
             });
         });
 

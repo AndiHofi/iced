@@ -1,66 +1,114 @@
-//! Build responsive widgets.
-use crate::{Cache, CacheBuilder};
-
-use iced_native::event::{self, Event};
+use iced_native::event;
 use iced_native::layout::{self, Layout};
 use iced_native::mouse;
 use iced_native::overlay;
 use iced_native::renderer;
-use iced_native::window;
+use iced_native::widget::tree::{self, Tree};
+use iced_native::widget::{self, horizontal_space};
 use iced_native::{
-    Clipboard, Element, Hasher, Length, Point, Rectangle, Shell, Size, Widget,
+    Clipboard, Element, Length, Point, Rectangle, Shell, Size, Widget,
 };
 
-use std::cell::RefCell;
-use std::hash::{Hash, Hasher as _};
+use ouroboros::self_referencing;
+use std::cell::{RefCell, RefMut};
+use std::marker::PhantomData;
 use std::ops::Deref;
-
-/// The state of a [`Responsive`] widget.
-#[derive(Debug, Clone, Default)]
-pub struct State {
-    last_size: Option<Size>,
-    last_layout: layout::Node,
-    last_layout_hash: u64,
-}
-
-impl State {
-    pub fn new() -> State {
-        State::default()
-    }
-
-    fn layout(&self, parent: Layout<'_>) -> Layout<'_> {
-        Layout::with_offset(
-            parent.position() - Point::ORIGIN,
-            &self.last_layout,
-        )
-    }
-}
 
 /// A widget that is aware of its dimensions.
 ///
 /// A [`Responsive`] widget will always try to fill all the available space of
 /// its parent.
 #[allow(missing_debug_implementations)]
-pub struct Responsive<'a, Message, Renderer>(
-    RefCell<Internal<'a, Message, Renderer>>,
-);
+pub struct Responsive<'a, Message, Renderer> {
+    view: Box<dyn Fn(Size) -> Element<'a, Message, Renderer> + 'a>,
+    content: RefCell<Content<'a, Message, Renderer>>,
+}
 
-impl<'a, Message, Renderer> Responsive<'a, Message, Renderer> {
-    /// Creates a new [`Responsive`] widget with the given [`State`] and a
-    /// closure that produces its contents.
+impl<'a, Message, Renderer> Responsive<'a, Message, Renderer>
+where
+    Renderer: iced_native::Renderer,
+{
+    /// Creates a new [`Responsive`] widget with a closure that produces its
+    /// contents.
     ///
     /// The `view` closure will be provided with the current [`Size`] of
     /// the [`Responsive`] widget and, therefore, can be used to build the
     /// contents of the widget in a responsive way.
     pub fn new(
-        state: &'a mut State,
-        view: impl FnOnce(Size) -> Element<'a, Message, Renderer> + 'a,
+        view: impl Fn(Size) -> Element<'a, Message, Renderer> + 'a,
     ) -> Self {
-        Self(RefCell::new(Internal {
-            state,
-            content: Content::Pending(Some(Box::new(view))),
-        }))
+        Self {
+            view: Box::new(view),
+            content: RefCell::new(Content {
+                size: Size::ZERO,
+                layout: layout::Node::new(Size::ZERO),
+                element: Element::new(horizontal_space(Length::Units(0))),
+            }),
+        }
     }
+}
+
+struct Content<'a, Message, Renderer> {
+    size: Size,
+    layout: layout::Node,
+    element: Element<'a, Message, Renderer>,
+}
+
+impl<'a, Message, Renderer> Content<'a, Message, Renderer>
+where
+    Renderer: iced_native::Renderer,
+{
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        new_size: Size,
+        view: &dyn Fn(Size) -> Element<'a, Message, Renderer>,
+    ) {
+        if self.size == new_size {
+            return;
+        }
+
+        self.element = view(new_size);
+        self.size = new_size;
+
+        tree.diff(&self.element);
+
+        self.layout = self
+            .element
+            .as_widget()
+            .layout(renderer, &layout::Limits::new(Size::ZERO, self.size));
+    }
+
+    fn resolve<R, T>(
+        &mut self,
+        tree: &mut Tree,
+        renderer: R,
+        layout: Layout<'_>,
+        view: &dyn Fn(Size) -> Element<'a, Message, Renderer>,
+        f: impl FnOnce(
+            &mut Tree,
+            R,
+            Layout<'_>,
+            &mut Element<'a, Message, Renderer>,
+        ) -> T,
+    ) -> T
+    where
+        R: Deref<Target = Renderer>,
+    {
+        self.update(tree, renderer.deref(), layout.bounds().size(), view);
+
+        let content_layout = Layout::with_offset(
+            layout.position() - Point::ORIGIN,
+            &self.layout,
+        );
+
+        f(tree, renderer, content_layout, &mut self.element)
+    }
+}
+
+struct State {
+    tree: RefCell<Tree>,
 }
 
 impl<'a, Message, Renderer> Widget<Message, Renderer>
@@ -68,6 +116,16 @@ impl<'a, Message, Renderer> Widget<Message, Renderer>
 where
     Renderer: iced_native::Renderer,
 {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<State>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(State {
+            tree: RefCell::new(Tree::empty()),
+        })
+    }
+
     fn width(&self) -> Length {
         Length::Fill
     }
@@ -76,227 +134,173 @@ where
         Length::Fill
     }
 
-    fn hash_layout(&self, _hasher: &mut Hasher) {}
-
     fn layout(
         &self,
         _renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let size = limits.max();
+        layout::Node::new(limits.max())
+    }
 
-        self.0.borrow_mut().state.last_size = Some(size);
+    fn operate(
+        &self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn widget::Operation<Message>,
+    ) {
+        let state = tree.state.downcast_mut::<State>();
+        let mut content = self.content.borrow_mut();
 
-        layout::Node::new(size)
+        content.resolve(
+            &mut state.tree.borrow_mut(),
+            renderer,
+            layout,
+            &self.view,
+            |tree, renderer, layout, element| {
+                element
+                    .as_widget()
+                    .operate(tree, layout, renderer, operation);
+            },
+        );
     }
 
     fn on_event(
         &mut self,
-        event: Event,
+        tree: &mut Tree,
+        event: iced_native::Event,
         layout: Layout<'_>,
         cursor_position: Point,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
     ) -> event::Status {
-        let mut internal = self.0.borrow_mut();
+        let state = tree.state.downcast_mut::<State>();
+        let mut content = self.content.borrow_mut();
 
-        if matches!(event, Event::Window(window::Event::Resized { .. }))
-            || internal.state.last_size
-                != Some(internal.state.last_layout.size())
-        {
-            shell.invalidate_widgets();
-        }
-
-        internal.resolve(renderer, |state, renderer, content| {
-            content.on_event(
-                event,
-                state.layout(layout),
-                cursor_position,
-                renderer,
-                clipboard,
-                shell,
-            )
-        })
+        content.resolve(
+            &mut state.tree.borrow_mut(),
+            renderer,
+            layout,
+            &self.view,
+            |tree, renderer, layout, element| {
+                element.as_widget_mut().on_event(
+                    tree,
+                    event,
+                    layout,
+                    cursor_position,
+                    renderer,
+                    clipboard,
+                    shell,
+                )
+            },
+        )
     }
 
     fn draw(
         &self,
+        tree: &Tree,
         renderer: &mut Renderer,
+        theme: &Renderer::Theme,
         style: &renderer::Style,
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
     ) {
-        let mut internal = self.0.borrow_mut();
+        let state = tree.state.downcast_ref::<State>();
+        let mut content = self.content.borrow_mut();
 
-        internal.resolve(renderer, |state, renderer, content| {
-            content.draw(
-                renderer,
-                style,
-                state.layout(layout),
-                cursor_position,
-                viewport,
-            )
-        })
+        content.resolve(
+            &mut state.tree.borrow_mut(),
+            renderer,
+            layout,
+            &self.view,
+            |tree, renderer, layout, element| {
+                element.as_widget().draw(
+                    tree,
+                    renderer,
+                    theme,
+                    style,
+                    layout,
+                    cursor_position,
+                    viewport,
+                )
+            },
+        )
     }
 
     fn mouse_interaction(
         &self,
+        tree: &Tree,
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        let mut internal = self.0.borrow_mut();
+        let state = tree.state.downcast_ref::<State>();
+        let mut content = self.content.borrow_mut();
 
-        internal.resolve(renderer, |state, renderer, content| {
-            content.mouse_interaction(
-                state.layout(layout),
-                cursor_position,
-                viewport,
-                renderer,
-            )
-        })
+        content.resolve(
+            &mut state.tree.borrow_mut(),
+            renderer,
+            layout,
+            &self.view,
+            |tree, renderer, layout, element| {
+                element.as_widget().mouse_interaction(
+                    tree,
+                    layout,
+                    cursor_position,
+                    viewport,
+                    renderer,
+                )
+            },
+        )
     }
 
-    fn overlay(
-        &mut self,
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
-    ) -> Option<overlay::Element<'_, Message, Renderer>> {
-        let has_overlay = {
-            use std::ops::DerefMut;
+    ) -> Option<overlay::Element<'b, Message, Renderer>> {
+        use std::ops::DerefMut;
 
-            let mut internal = self.0.borrow_mut();
+        let state = tree.state.downcast_ref::<State>();
 
-            let _ =
-                internal.resolve(renderer, |_state, _renderer, _content| {});
-
-            let Internal { content, state } = internal.deref_mut();
-
-            let content_layout = state.layout(layout);
-
-            match content {
-                Content::Pending(_) => false,
-                Content::Ready(cache) => {
-                    *cache = Some(
-                        CacheBuilder {
-                            element: cache.take().unwrap().into_heads().element,
-                            overlay_builder: |element| {
-                                element.overlay(content_layout, renderer)
-                            },
-                        }
-                        .build(),
-                    );
-
-                    cache.as_ref().unwrap().borrow_overlay().is_some()
-                }
-            }
-        };
-
-        has_overlay.then(|| {
-            overlay::Element::new(
-                layout.position(),
-                Box::new(Overlay { instance: self }),
-            )
-        })
-    }
-}
-
-struct Internal<'a, Message, Renderer> {
-    state: &'a mut State,
-    content: Content<'a, Message, Renderer>,
-}
-
-impl<'a, Message, Renderer> Internal<'a, Message, Renderer>
-where
-    Renderer: iced_native::Renderer,
-{
-    fn resolve<R, T>(
-        &mut self,
-        renderer: R,
-        f: impl FnOnce(&State, R, &mut Element<'a, Message, Renderer>) -> T,
-    ) -> T
-    where
-        R: Deref<Target = Renderer>,
-    {
-        self.content.resolve(&mut self.state, renderer, f)
-    }
-}
-
-enum Content<'a, Message, Renderer> {
-    Pending(
-        Option<Box<dyn FnOnce(Size) -> Element<'a, Message, Renderer> + 'a>>,
-    ),
-    Ready(Option<Cache<'a, Message, Renderer>>),
-}
-
-impl<'a, Message, Renderer> Content<'a, Message, Renderer>
-where
-    Renderer: iced_native::Renderer,
-{
-    fn resolve<R, T>(
-        &mut self,
-        state: &mut State,
-        renderer: R,
-        f: impl FnOnce(&State, R, &mut Element<'a, Message, Renderer>) -> T,
-    ) -> T
-    where
-        R: Deref<Target = Renderer>,
-    {
-        match self {
-            Content::Ready(cache) => {
-                let mut heads = cache.take().unwrap().into_heads();
-
-                let result = f(state, renderer, &mut heads.element);
-
-                *cache = Some(
-                    CacheBuilder {
-                        element: heads.element,
-                        overlay_builder: |_| None,
-                    }
-                    .build(),
+        let overlay = OverlayBuilder {
+            content: self.content.borrow_mut(),
+            tree: state.tree.borrow_mut(),
+            types: PhantomData,
+            overlay_builder: |content: &mut RefMut<Content<_, _>>, tree| {
+                content.update(
+                    tree,
+                    renderer,
+                    layout.bounds().size(),
+                    &self.view,
                 );
 
-                result
-            }
-            Content::Pending(view) => {
-                let element =
-                    view.take().unwrap()(state.last_size.unwrap_or(Size::ZERO));
+                let Content {
+                    element, layout, ..
+                } = content.deref_mut();
 
-                let new_layout_hash = {
-                    let mut hasher = Hasher::default();
-                    element.hash_layout(&mut hasher);
+                let content_layout = Layout::with_offset(
+                    layout.bounds().position() - Point::ORIGIN,
+                    layout,
+                );
 
-                    hasher.finish()
-                };
-
-                if state.last_size != Some(state.last_layout.size())
-                    || new_layout_hash != state.last_layout_hash
-                {
-                    state.last_layout = element.layout(
-                        renderer.deref(),
-                        &layout::Limits::new(
-                            Size::ZERO,
-                            state.last_size.unwrap_or(Size::ZERO),
-                        ),
-                    );
-
-                    state.last_layout_hash = new_layout_hash;
-                }
-
-                *self = Content::Ready(Some(
-                    CacheBuilder {
-                        element,
-                        overlay_builder: |_| None,
-                    }
-                    .build(),
-                ));
-
-                self.resolve(state, renderer, f)
-            }
+                element
+                    .as_widget_mut()
+                    .overlay(tree, content_layout, renderer)
+            },
         }
+        .build();
+
+        let has_overlay = overlay.with_overlay(|overlay| {
+            overlay.as_ref().map(overlay::Element::position)
+        });
+
+        has_overlay
+            .map(|position| overlay::Element::new(position, Box::new(overlay)))
     }
 }
 
@@ -311,8 +315,15 @@ where
     }
 }
 
+#[self_referencing]
 struct Overlay<'a, 'b, Message, Renderer> {
-    instance: &'b mut Responsive<'a, Message, Renderer>,
+    content: RefMut<'a, Content<'b, Message, Renderer>>,
+    tree: RefMut<'a, Tree>,
+    types: PhantomData<Message>,
+
+    #[borrows(mut content, mut tree)]
+    #[covariant]
+    overlay: Option<overlay::Element<'this, Message, Renderer>>,
 }
 
 impl<'a, 'b, Message, Renderer> Overlay<'a, 'b, Message, Renderer> {
@@ -320,29 +331,14 @@ impl<'a, 'b, Message, Renderer> Overlay<'a, 'b, Message, Renderer> {
         &self,
         f: impl FnOnce(&overlay::Element<'_, Message, Renderer>) -> T,
     ) -> Option<T> {
-        let internal = self.instance.0.borrow();
-
-        match &internal.content {
-            Content::Pending(_) => None,
-            Content::Ready(cache) => {
-                cache.as_ref().unwrap().borrow_overlay().as_ref().map(f)
-            }
-        }
+        self.borrow_overlay().as_ref().map(f)
     }
 
     fn with_overlay_mut_maybe<T>(
-        &self,
+        &mut self,
         f: impl FnOnce(&mut overlay::Element<'_, Message, Renderer>) -> T,
     ) -> Option<T> {
-        let mut internal = self.instance.0.borrow_mut();
-
-        match &mut internal.content {
-            Content::Pending(_) => None,
-            Content::Ready(cache) => cache
-                .as_mut()
-                .unwrap()
-                .with_overlay_mut(|overlay| overlay.as_mut().map(f)),
-        }
+        self.with_overlay_mut(|overlay| overlay.as_mut().map(f))
     }
 }
 
@@ -368,12 +364,13 @@ where
     fn draw(
         &self,
         renderer: &mut Renderer,
+        theme: &Renderer::Theme,
         style: &renderer::Style,
         layout: Layout<'_>,
         cursor_position: Point,
     ) {
-        self.with_overlay_maybe(|overlay| {
-            overlay.draw(renderer, style, layout, cursor_position);
+        let _ = self.with_overlay_maybe(|overlay| {
+            overlay.draw(renderer, theme, style, layout, cursor_position);
         });
     }
 
@@ -395,18 +392,6 @@ where
         .unwrap_or_default()
     }
 
-    fn hash_layout(&self, state: &mut Hasher, position: Point) {
-        struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
-
-        (position.x as u32).hash(state);
-        (position.y as u32).hash(state);
-
-        self.with_overlay_maybe(|overlay| {
-            overlay.hash_layout(state);
-        });
-    }
-
     fn on_event(
         &mut self,
         event: iced_native::Event,
@@ -415,7 +400,7 @@ where
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
-    ) -> iced_native::event::Status {
+    ) -> event::Status {
         self.with_overlay_mut_maybe(|overlay| {
             overlay.on_event(
                 event,
@@ -426,6 +411,6 @@ where
                 shell,
             )
         })
-        .unwrap_or_else(|| iced_native::event::Status::Ignored)
+        .unwrap_or(iced_native::event::Status::Ignored)
     }
 }

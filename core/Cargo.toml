@@ -1,8 +1,8 @@
 [package]
 name = "iced_core"
-version = "0.4.0"
+version = "0.6.2"
 authors = ["Héctor Ramón Jiménez <hector0193@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "The essential concepts of Iced"
 license = "MIT"
 repository = "https://github.com/iced-rs/iced"
@@ -11,7 +11,7 @@ repository = "https://github.com/iced-rs/iced"
 bitflags = "1.2"
 
 [dependencies.palette]
-version = "0.5"
+version = "0.6"
 optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

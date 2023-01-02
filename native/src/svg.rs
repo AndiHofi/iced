@@ -1,11 +1,12 @@
 //! Load and draw vector graphics.
-use crate::{Hasher, Rectangle};
+use crate::{Color, Hasher, Rectangle, Size};
 
+use std::borrow::Cow;
 use std::hash::{Hash, Hasher as _};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// An [`Svg`] handle.
+/// A handle of Svg data.
 #[derive(Debug, Clone)]
 pub struct Handle {
     id: u64,
@@ -24,7 +25,7 @@ impl Handle {
     ///
     /// This is useful if you already have your SVG data in-memory, maybe
     /// because you downloaded or generated it procedurally.
-    pub fn from_memory(bytes: impl Into<Vec<u8>>) -> Handle {
+    pub fn from_memory(bytes: impl Into<Cow<'static, [u8]>>) -> Handle {
         Self::from_data(Data::Bytes(bytes.into()))
     }
 
@@ -55,7 +56,7 @@ impl Hash for Handle {
     }
 }
 
-/// The data of an [`Svg`].
+/// The data of a vectorial image.
 #[derive(Clone, Hash)]
 pub enum Data {
     /// File data
@@ -64,7 +65,7 @@ pub enum Data {
     /// In-memory data
     ///
     /// Can contain an SVG string or a gzip compressed data.
-    Bytes(Vec<u8>),
+    Bytes(Cow<'static, [u8]>),
 }
 
 impl std::fmt::Debug for Data {
@@ -81,8 +82,8 @@ impl std::fmt::Debug for Data {
 /// [renderer]: crate::renderer
 pub trait Renderer: crate::Renderer {
     /// Returns the default dimensions of an SVG for the given [`Handle`].
-    fn dimensions(&self, handle: &Handle) -> (u32, u32);
+    fn dimensions(&self, handle: &Handle) -> Size<u32>;
 
-    /// Draws an SVG with the given [`Handle`] and inside the provided `bounds`.
-    fn draw(&mut self, handle: Handle, bounds: Rectangle);
+    /// Draws an SVG with the given [`Handle`], an optional [`Color`] filter, and inside the provided `bounds`.
+    fn draw(&mut self, handle: Handle, color: Option<Color>, bounds: Rectangle);
 }

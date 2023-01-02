@@ -1,3 +1,6 @@
+//! A compositor is responsible for initializing a renderer and managing window
+//! surfaces.
+use crate::compositor::Information;
 use crate::{Color, Error, Size, Viewport};
 
 use core::ffi::c_void;
@@ -32,6 +35,9 @@ pub trait GLCompositor: Sized {
     /// Creates a new [`GLCompositor`] and [`Renderer`] with the given
     /// [`Settings`] and an OpenGL address loader function.
     ///
+    /// # Safety
+    /// The `loader_function` should resolve to valid OpenGL bindings.
+    ///
     /// [`Renderer`]: crate::Renderer
     /// [`Backend`]: crate::Backend
     /// [`Settings`]: Self::Settings
@@ -47,6 +53,9 @@ pub trait GLCompositor: Sized {
 
     /// Resizes the viewport of the [`GLCompositor`].
     fn resize_viewport(&mut self, physical_size: Size<u32>);
+
+    /// Returns [`Information`] used by this [`GLCompositor`].
+    fn fetch_information(&self) -> Information;
 
     /// Presents the primitives of the [`Renderer`] to the next frame of the
     /// [`GLCompositor`].
