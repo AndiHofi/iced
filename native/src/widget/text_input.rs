@@ -29,6 +29,18 @@ use crate::{
 
 pub use iced_style::text_input::{Appearance, StyleSheet};
 
+/// Allows to react on state changes of the text_input for fine grained control and implementing
+/// accessibility features
+#[derive(Debug)]
+pub enum Action {
+    /// Input submit
+    Submit,
+    /// Gained keyboard focus
+    FocusGained,
+    /// Lost keyboard focus
+    FocusLost,
+}
+
 /// A field that can be filled with text.
 ///
 /// # Example
@@ -66,6 +78,7 @@ where
     on_change: Box<dyn Fn(String) -> Message + 'a>,
     on_paste: Option<Box<dyn Fn(String) -> Message + 'a>>,
     on_submit: Option<Message>,
+    on_action: Option<Box<dyn Fn(Action) -> Option<Message> + 'a>>,
     style: <Renderer::Theme as StyleSheet>::Style,
 }
 
@@ -97,6 +110,7 @@ where
             on_change: Box::new(on_change),
             on_paste: None,
             on_submit: None,
+            on_action: None,
             style: Default::default(),
         }
     }
@@ -152,6 +166,18 @@ where
     /// focused and the enter key is pressed.
     pub fn on_submit(mut self, message: Message) -> Self {
         self.on_submit = Some(message);
+        self
+    }
+
+    /// Define an action handler.
+    ///
+    /// Can also be used for handling text input submit, instead of setting the
+    /// #on_submit message
+    pub fn on_action<F>(mut self, handler: F) -> Self
+    where
+        F: Fn(Action) -> Option<Message> + 'a,
+    {
+        self.on_action = Some(Box::new(handler));
         self
     }
 
@@ -261,6 +287,7 @@ where
             self.on_change.as_ref(),
             self.on_paste.as_deref(),
             &self.on_submit,
+            self.on_action.as_deref(),
             || tree.state.downcast_mut::<State>(),
         )
     }
@@ -413,6 +440,7 @@ pub fn update<'a, Message, Renderer>(
     on_change: &dyn Fn(String) -> Message,
     on_paste: Option<&dyn Fn(String) -> Message>,
     on_submit: &Option<Message>,
+    on_action: Option<&dyn Fn(Action) -> Option<Message>>,
     state: impl FnOnce() -> &'a mut State,
 ) -> event::Status
 where
@@ -424,8 +452,10 @@ where
         | Event::Touch(touch::Event::FingerPressed { .. }) => {
             let state = state();
             let is_clicked = layout.bounds().contains(cursor_position);
-
+            // also set the was_focused flag because the related message handler
+            // is called in this function
             state.is_focused = is_clicked;
+            focus_change(state, shell, on_action);
 
             if is_clicked {
                 let text_layout = layout.children().next().unwrap();
@@ -502,6 +532,8 @@ where
         | Event::Touch(touch::Event::FingerMoved { position, .. }) => {
             let state = state();
 
+            focus_change(state, shell, on_action);
+
             if state.is_dragging {
                 let text_layout = layout.children().next().unwrap();
                 let target = position.x - text_layout.bounds().x;
@@ -533,6 +565,8 @@ where
         Event::Keyboard(keyboard::Event::CharacterReceived(c)) => {
             let state = state();
 
+            focus_change(state, shell, on_action);
+
             if state.is_focused
                 && state.is_pasting.is_none()
                 && !state.keyboard_modifiers.command()
@@ -551,14 +585,20 @@ where
         Event::Keyboard(keyboard::Event::KeyPressed { key_code, .. }) => {
             let state = state();
 
+            focus_change(state, shell, on_action);
+
             if state.is_focused {
                 let modifiers = state.keyboard_modifiers;
 
                 match key_code {
                     keyboard::KeyCode::Enter
                     | keyboard::KeyCode::NumpadEnter => {
-                        if let Some(on_submit) = on_submit.clone() {
-                            shell.publish(on_submit);
+                        if let Some(on_submit) = on_submit {
+                            shell.publish(on_submit.clone());
+                        } else if let Some(handler) = on_action {
+                            if let Some(message) = handler(Action::Submit) {
+                                shell.publish(message);
+                            }
                         }
                     }
                     keyboard::KeyCode::Backspace => {
@@ -734,6 +774,8 @@ where
         Event::Keyboard(keyboard::Event::KeyReleased { key_code, .. }) => {
             let state = state();
 
+            focus_change(state, shell, on_action);
+
             if state.is_focused {
                 match key_code {
                     keyboard::KeyCode::V => {
@@ -755,12 +797,37 @@ where
         Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
             let state = state();
 
+            focus_change(state, shell, on_action);
+
             state.keyboard_modifiers = modifiers;
         }
-        _ => {}
+        _ => {
+            let state = state();
+            focus_change(state, shell, on_action);
+        }
     }
 
     event::Status::Ignored
+}
+
+fn focus_change<Message>(
+    state: &mut State,
+    shell: &mut Shell<'_, Message>,
+    on_action: Option<&dyn Fn(Action) -> Option<Message>>,
+) where
+    Message: Clone,
+{
+    let action = match (state.was_focused, state.is_focused) {
+        (false, true) => Some(Action::FocusGained),
+        (true, false) => Some(Action::FocusLost),
+        _ => None,
+    };
+    if let Some(action) = action {
+        state.was_focused = state.is_focused;
+        if let Some(message) = on_action.and_then(|handler| handler(action)) {
+            shell.publish(message);
+        }
+    }
 }
 
 /// Draws the [`TextInput`] with the given [`Renderer`], overriding its
@@ -951,6 +1018,7 @@ pub fn mouse_interaction(
 #[derive(Debug, Default, Clone)]
 pub struct State {
     is_focused: bool,
+    was_focused: bool,
     is_dragging: bool,
     is_pasting: Option<Value>,
     last_click: Option<mouse::Click>,
@@ -969,6 +1037,7 @@ impl State {
     pub fn focused() -> Self {
         Self {
             is_focused: true,
+            was_focused: true,
             is_dragging: false,
             is_pasting: None,
             last_click: None,
